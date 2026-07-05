@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Question Bank</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <style>
   :root{
     --ink:#1a2236; --ink-soft:#5b6479; --line:#e2e5ec; --bg:#f6f7f9; --paper:#ffffff;
@@ -82,6 +85,17 @@
 
 <!-- ================= ADD QUESTION TAB ================= -->
 <div id="pane-add" style="display:none">
+  <div class="panel" style="border-color:var(--accent)">
+    <h2>🤖 AI Extract (from photo of question paper/book)</h2>
+    <p class="count" style="margin:0 0 10px">Take a photo of a page → AI reads all questions → you review → save. Uses your API credits (~₹1–3/page). Photos are NOT stored — only clean text.</p>
+    <div class="row">
+      <label for="aiPick" style="cursor:pointer;background:var(--accent);color:#fff;padding:10px 18px;border-radius:9px;font-weight:600;font-size:14px">📄 Photo → AI Extract</label>
+      <input type="file" id="aiPick" accept="image/*" style="display:none">
+      <span class="count" id="aiStatus"></span>
+    </div>
+    <div id="aiResults" style="margin-top:14px"></div>
+  </div>
+
   <div class="help"><strong>Add a question:</strong> paste an image directly (Cmd+V after copying a screenshot) or type the question text. Fill in the tags, then Save.</div>
   <div class="panel">
     <h2>Question content</h2>
@@ -266,6 +280,89 @@ document.getElementById('photoPick').addEventListener('change', e=>{
   e.target.value='';
 });
 
+/* ---------- AI EXTRACTION ---------- */
+let extractedQs = [];
+document.getElementById('aiPick').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  const st=document.getElementById('aiStatus');
+  st.textContent='Reading image with AI… (10–30 sec)';
+  try{
+    const b64 = await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);
+      r.onerror=()=>rej(new Error('read failed'));
+      r.readAsDataURL(f);
+    });
+    const resp = await fetch(SUPABASE_URL+'/functions/v1/extract-questions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY},
+      body:JSON.stringify({imageBase64:b64, mediaType:f.type||'image/jpeg'})
+    });
+    const data = await resp.json();
+    if(data.error){ st.textContent=''; toast('AI error: '+data.error); return; }
+    extractedQs = Array.isArray(data)?data:[];
+    st.textContent = extractedQs.length+' question(s) found — review below, then save.';
+    renderExtracted();
+  }catch(err){
+    st.textContent=''; toast('Extraction failed: '+err.message);
+  }
+});
+
+function renderExtracted(){
+  const box=document.getElementById('aiResults'); box.innerHTML='';
+  extractedQs.forEach((q,i)=>{
+    const d=document.createElement('div');
+    d.className='panel'; d.style.background='#fbfdfc';
+    d.innerHTML=`
+      <div class="row" style="margin-bottom:8px">
+        <strong>Q${i+1}</strong>
+        <span class="chip">${q.question_type||'—'}</span>
+        ${q.has_diagram?'<span class="chip" style="background:var(--warn-soft);color:var(--warn)">needs diagram — add photo manually below</span>':''}
+        <button class="danger mini" style="margin-left:auto" onclick="extractedQs.splice(${i},1);renderExtracted()">Discard</button>
+      </div>
+      <textarea rows="4" style="width:100%" oninput="extractedQs[${i}].question_text=this.value">${q.question_text||''}</textarea>
+      <div style="margin-top:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:8px" class="mathprev">${(q.question_text||'').replace(/</g,'&lt;')}</div>`;
+    box.appendChild(d);
+  });
+  if(extractedQs.length){
+    const bar=document.createElement('div'); bar.className='row'; bar.style.marginTop='10px';
+    bar.innerHTML=`<button onclick="saveExtracted()">Save all ${extractedQs.length} to bank</button>
+      <span class="count">Tags below (Subject/Topic/etc.) will apply to all of them.</span>`;
+    box.appendChild(bar);
+  }
+  renderMath(box);
+}
+
+async function saveExtracted(){
+  const subject=document.getElementById('fSubject').value.trim();
+  if(!subject){ toast('Fill in Subject (in Tags section below) first.'); return; }
+  const st=document.getElementById('aiStatus');
+  st.textContent='Saving…';
+  const base={
+    subject,
+    topic: document.getElementById('fTopic').value.trim()||null,
+    subtopic: document.getElementById('fSubtopic').value.trim()||null,
+    difficulty: document.getElementById('fDiff').value||null,
+    marks: document.getElementById('fMarks').value?Number(document.getElementById('fMarks').value):null,
+    source: [document.getElementById('fSourceType').value, document.getElementById('fSourceDetail').value.trim()].filter(Boolean).join(' · ')||null,
+    image_url:null, use_count:0
+  };
+  const rows = extractedQs.map(q=>({...base, question_text:q.question_text, question_type:q.question_type||null}));
+  const {error} = await sb.from('questions').insert(rows);
+  if(error){ st.textContent=''; toast('Save failed: '+error.message); return; }
+  toast(rows.length+' questions saved!');
+  st.textContent=''; extractedQs=[]; renderExtracted();
+  await loadQuestions();
+}
+
+/* ---------- MATH RENDERING ---------- */
+function renderMath(el){
+  if(typeof renderMathInElement==='function'){
+    try{ renderMathInElement(el||document.body,{delimiters:[{left:'$',right:'$',display:false},{left:'$$',right:'$$',display:true}],throwOnError:false}); }catch(e){}
+  }
+}
+
 function showPastedImage(blob){
   pastedBlob = blob;
   const url = URL.createObjectURL(blob);
@@ -424,12 +521,12 @@ async function generatePaper(){
       const tags=[tlabel,q.question_type,q.marks?q.marks+' marks':''].filter(Boolean).join(' · ');
       html+=`<div class="q"><span class="qnum">Q${n}.</span>
         ${tags?'<span class="qtopic">['+tags+']</span>':''}
-        ${q.question_text?'<div class="qtext">'+q.question_text+'</div>':''}
-        ${q.image_url?'<img src="'+q.image_url+'" alt="question image">':''}</div>`;
+        ${q.question_text?'<div class="qtext">'+q.question_text.replace(/</g,'&lt;')+'</div>':(q.image_url?'<img src="'+q.image_url+'" alt="question image">':'')}</div>`;
       n++;
     });
   });
   document.getElementById('paper').innerHTML=html;
+  renderMath(document.getElementById('paper'));
   document.getElementById('paperActions').style.display='block';
   document.getElementById('paperActions').scrollIntoView({behavior:'smooth'});
 
