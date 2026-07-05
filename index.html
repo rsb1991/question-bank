@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Question Bank</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --ink:#1a2236; --ink-soft:#5b6479; --line:#e2e5ec; --bg:#f6f7f9; --paper:#ffffff;
+    --accent:#2d6a4f; --accent-soft:#e8f1ec; --warn:#b4451f; --warn-soft:#fbeae5; --chip:#eef0f4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  header.top{background:var(--paper);border-bottom:1px solid var(--line);padding:16px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+  header.top h1{font-size:19px;margin:0;letter-spacing:-.3px}
+  .tag{font-size:12px;color:var(--ink-soft);background:var(--chip);padding:3px 9px;border-radius:20px}
+  nav.tabs{display:flex;gap:6px;margin-left:auto}
+  nav.tabs button{background:none;border:none;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;color:var(--ink-soft);cursor:pointer}
+  nav.tabs button.active{background:var(--accent-soft);color:var(--accent)}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px}
+  .panel h2{font-size:15px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:13px;color:var(--ink-soft);font-weight:600}
+  select,input,button,textarea{font-family:inherit;font-size:14px}
+  select,input,textarea{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  textarea{resize:vertical}
+  button{padding:10px 18px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;transition:opacity .15s}
+  button:hover{opacity:.9}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:var(--accent-soft);color:var(--accent)}
+  button.danger{background:var(--warn-soft);color:var(--warn)}
+  button.mini{padding:5px 11px;font-size:12px}
+  .help{font-size:13px;color:var(--ink-soft);background:#fbfbfc;border:1px dashed var(--line);border-radius:10px;padding:14px;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--ink-soft);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+  .chip{display:inline-block;background:var(--chip);padding:2px 8px;border-radius:14px;font-size:12px}
+  .count{font-size:13px;color:var(--ink-soft)}
+  .subj-block{margin-bottom:12px}
+  .thumb{width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+  /* PASTE ZONE */
+  .pastezone{
+    border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;color:var(--ink-soft);
+    background:#fbfdfc;cursor:text;min-height:70px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;
+  }
+  .pastezone.has-image{padding:12px;border-style:solid}
+  .pastezone img{max-width:100%;max-height:280px;border-radius:8px}
+  .pastezone.dragover{border-color:var(--accent);background:var(--accent-soft)}
+  /* PAPER */
+  #paper{display:none}
+  .paper-head{text-align:center;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:20px}
+  .paper-head h1{margin:0 0 4px;font-size:22px}
+  .paper-head .meta{font-size:13px;color:var(--ink-soft)}
+  .q{margin:0 0 22px;page-break-inside:avoid}
+  .q .qnum{font-weight:700}
+  .q .qtopic{font-size:12px;color:var(--ink-soft);margin-left:8px}
+  .q img{max-width:100%;margin-top:8px;border:1px solid var(--line);border-radius:6px}
+  .q .qtext{margin-top:6px;white-space:pre-wrap}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
+  .toast.show{opacity:1}
+  @media print{
+    header.top,.panel,.help,.noprint{display:none!important}
+    body{background:#fff} .wrap{padding:0;max-width:100%} #paper{display:block!important}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Question Bank</h1>
+  <span class="tag" id="connStatus">connecting…</span>
+  <nav class="tabs">
+    <button id="tabGen" class="active" onclick="showTab('gen')">Generate Paper</button>
+    <button id="tabAdd" onclick="showTab('add')">Add Question</button>
+    <button id="tabLib" onclick="showTab('lib')">Library</button>
+  </nav>
+</header>
+
+<div class="wrap">
+
+<!-- ================= ADD QUESTION TAB ================= -->
+<div id="pane-add" style="display:none">
+  <div class="help"><strong>Add a question:</strong> paste an image directly (Cmd+V after copying a screenshot) or type the question text. Fill in the tags, then Save.</div>
+  <div class="panel">
+    <h2>Question content</h2>
+    <div class="field" style="margin-bottom:14px">
+      <label>Paste image here (click the box first, then Cmd+V) — optional if typing text instead</label>
+      <div class="pastezone" id="pasteZone" tabindex="0">
+        <span id="pasteHint">Click here, then paste (Cmd+V) a copied screenshot</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="photoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:9px 16px;border-radius:9px;font-weight:600;font-size:14px">📷 Choose photo / take picture (iPhone)</label>
+        <input type="file" id="photoPick" accept="image/*" style="display:none">
+        <button class="ghost mini" id="clearImgBtn" style="display:none" onclick="clearPastedImage()">Remove image</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Question text (optional if using an image)</label>
+      <textarea id="qText" rows="3" placeholder="Type the question here if not using an image"></textarea>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Tags</h2>
+    <div class="row">
+      <div class="field">
+        <label>Subject *</label>
+        <input list="subjList" id="fSubject" placeholder="Physics" style="width:160px">
+        <datalist id="subjList"></datalist>
+      </div>
+      <div class="field">
+        <label>Topic</label>
+        <input list="topList" id="fTopic" placeholder="Kinematics" style="width:170px">
+        <datalist id="topList"></datalist>
+      </div>
+      <div class="field">
+        <label>Subtopic</label>
+        <input list="subtopList" id="fSubtopic" placeholder="Projectile" style="width:170px">
+        <datalist id="subtopList"></datalist>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="field">
+        <label>Question type</label>
+        <select id="fType">
+          <option value="">—</option>
+          <option>Numerical</option><option>Graphical</option><option>Assertion Reason</option>
+          <option>Match the Column</option><option>Statement Type</option><option>Numerical Value</option>
+          <option>True or False</option><option>MCQ</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Difficulty</label>
+        <select id="fDiff"><option value="">—</option><option>Easy</option><option>Medium</option><option>Tough</option></select>
+      </div>
+      <div class="field">
+        <label>Marks</label>
+        <input type="number" id="fMarks" style="width:90px">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="field">
+        <label>Source type</label>
+        <select id="fSourceType"><option value="">—</option><option>Author</option><option>Book</option><option>PYQ</option></select>
+      </div>
+      <div class="field" style="flex:1;min-width:200px">
+        <label>Source detail</label>
+        <input type="text" id="fSourceDetail" placeholder="e.g. NCERT Ch.4 / JEE 2023 / H.C. Verma" style="width:100%">
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button onclick="saveQuestion()">Save Question</button>
+      <span class="count" id="saveStatus"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= GENERATE TAB ================= -->
+<div id="pane-gen">
+  <div class="help"><strong>Generate a paper:</strong> set how many questions you want per topic/subtopic, then click Generate. Use Print → Save as PDF to download.</div>
+
+  <div class="panel">
+    <h2>Paper settings</h2>
+    <div class="row" style="margin-bottom:16px">
+      <div class="field"><label>Paper title</label><input type="text" id="paperTitle" value="Practice Paper" style="min-width:220px"></div>
+      <div class="field"><label>Total marks (optional)</label><input type="text" id="paperMarks" placeholder="e.g. 100" style="width:130px"></div>
+      <div class="field"><label>Difficulty</label><select id="diffFilter"><option value="">Any</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
+      <div class="field"><label>Question type</label><select id="typeFilter"><option value="">Any</option></select></div>
+    </div>
+    <div id="subjectControls"></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="generatePaper()">Generate Paper</button>
+      <button class="ghost" onclick="resetPicks()">Reset counts</button>
+      <span class="count" id="genStatus"></span>
+    </div>
+  </div>
+
+  <div id="paper"></div>
+  <div class="panel noprint" id="paperActions" style="display:none">
+    <h2>Your paper is ready</h2>
+    <p class="count">This will increase the "use count" of each question picked, so you can track how often it's been asked.</p>
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="ghost" onclick="generatePaper()">Re-roll (new random pick)</button>
+  </div>
+</div>
+
+<!-- ================= LIBRARY TAB ================= -->
+<div id="pane-lib" style="display:none">
+  <div class="panel">
+    <h2>Your question library <span class="count" id="libCount"></span></h2>
+    <div class="row" style="margin-bottom:12px">
+      <input type="text" id="libSearch" placeholder="Search subject/topic/source…" style="min-width:240px" oninput="renderLibrary()">
+      <button class="ghost mini" onclick="loadQuestions()">Refresh</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="libTable">
+        <thead><tr><th></th><th>Subject</th><th>Topic</th><th>Subtopic</th><th>Type</th><th>Diff.</th><th>Marks</th><th>Source</th><th>Used</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- SUPABASE SETUP ---------- */
+if(typeof supabase === 'undefined'){
+  document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif"><h2>Could not load database library</h2><p>Check your internet connection and refresh the page.</p></div>';
+  throw new Error('supabase-js failed to load');
+}
+const SUPABASE_URL = "https://ilvrcmbiuawqxvhcgnfh.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdnJjbWJpdWF3cXh2aGNnbmZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxOTA1NDAsImV4cCI6MjA5ODc2NjU0MH0.hFYpqQBXzeWtLSiNEMX_4gzqfeYX_qd0nbmVwgZBv6U";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let QUESTIONS = [];
+let pastedBlob = null;
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ---------- TABS ---------- */
+function showTab(name){
+  document.getElementById('pane-gen').style.display = name==='gen'?'block':'none';
+  document.getElementById('pane-add').style.display = name==='add'?'block':'none';
+  document.getElementById('pane-lib').style.display = name==='lib'?'block':'none';
+  document.getElementById('tabGen').classList.toggle('active',name==='gen');
+  document.getElementById('tabAdd').classList.toggle('active',name==='add');
+  document.getElementById('tabLib').classList.toggle('active',name==='lib');
+  if(name==='lib') renderLibrary();
+}
+
+/* ---------- PASTE IMAGE HANDLING ---------- */
+const pasteZone = document.getElementById('pasteZone');
+pasteZone.addEventListener('click',()=>pasteZone.focus());
+pasteZone.addEventListener('paste', e=>{
+  const items = e.clipboardData.items;
+  for(const item of items){
+    if(item.type.indexOf('image')===0){
+      const blob = item.getAsFile();
+      showPastedImage(blob);
+      e.preventDefault();
+      return;
+    }
+  }
+  toast('No image found in clipboard — copy a screenshot first.');
+});
+pasteZone.addEventListener('dragover', e=>{e.preventDefault();pasteZone.classList.add('dragover');});
+pasteZone.addEventListener('dragleave', ()=>pasteZone.classList.remove('dragover'));
+pasteZone.addEventListener('drop', e=>{
+  e.preventDefault();pasteZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if(f && f.type.indexOf('image')===0) showPastedImage(f);
+});
+
+document.getElementById('photoPick').addEventListener('change', e=>{
+  const f=e.target.files[0];
+  if(f && f.type.indexOf('image')===0) showPastedImage(f);
+  e.target.value='';
+});
+
+function showPastedImage(blob){
+  pastedBlob = blob;
+  const url = URL.createObjectURL(blob);
+  pasteZone.classList.add('has-image');
+  pasteZone.innerHTML = `<img src="${url}">`;
+  document.getElementById('clearImgBtn').style.display='inline-block';
+}
+function clearPastedImage(){
+  pastedBlob=null;
+  pasteZone.classList.remove('has-image');
+  pasteZone.innerHTML = `<span id="pasteHint">Click here, then paste (Cmd+V) a copied screenshot</span>`;
+  document.getElementById('clearImgBtn').style.display='none';
+}
+
+/* ---------- SAVE QUESTION ---------- */
+async function saveQuestion(){
+  const subject = document.getElementById('fSubject').value.trim();
+  if(!subject){ toast('Subject is required.'); return; }
+  const qText = document.getElementById('qText').value.trim();
+  if(!qText && !pastedBlob){ toast('Add either an image or question text.'); return; }
+
+  document.getElementById('saveStatus').textContent='Saving…';
+  let imageUrl = null;
+
+  if(pastedBlob){
+    const fileName = `q_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+    const {data, error} = await sb.storage.from('question-images').upload(fileName, pastedBlob, {contentType: pastedBlob.type || 'image/png'});
+    if(error){ document.getElementById('saveStatus').textContent=''; toast('Image upload failed: '+error.message); return; }
+    const {data: pub} = sb.storage.from('question-images').getPublicUrl(fileName);
+    imageUrl = pub.publicUrl;
+  }
+
+  const row = {
+    subject, 
+    topic: document.getElementById('fTopic').value.trim() || null,
+    subtopic: document.getElementById('fSubtopic').value.trim() || null,
+    question_type: document.getElementById('fType').value || null,
+    difficulty: document.getElementById('fDiff').value || null,
+    marks: document.getElementById('fMarks').value ? Number(document.getElementById('fMarks').value) : null,
+    source: [document.getElementById('fSourceType').value, document.getElementById('fSourceDetail').value.trim()].filter(Boolean).join(' · ') || null,
+    question_text: qText || null,
+    image_url: imageUrl,
+    use_count: 0
+  };
+
+  const {error: insErr} = await sb.from('questions').insert(row);
+  if(insErr){ document.getElementById('saveStatus').textContent=''; toast('Save failed: '+insErr.message); return; }
+
+  toast('Question saved!');
+  document.getElementById('saveStatus').textContent='Saved ✓';
+  setTimeout(()=>document.getElementById('saveStatus').textContent='',1500);
+
+  // reset form (keep subject/topic for fast bulk entry)
+  document.getElementById('qText').value='';
+  clearPastedImage();
+  document.getElementById('fMarks').value='';
+
+  await loadQuestions();
+}
+
+/* ---------- LOAD QUESTIONS ---------- */
+async function loadQuestions(){
+  document.getElementById('connStatus').textContent='loading…';
+  const {data, error} = await sb.from('questions').select('*').order('created_at',{ascending:false});
+  if(error){ document.getElementById('connStatus').textContent='error'; toast('Load failed: '+error.message); return; }
+  QUESTIONS = data || [];
+  document.getElementById('connStatus').textContent = QUESTIONS.length+' questions in bank';
+  populateDatalists();
+  buildGenControls();
+  renderLibrary();
+}
+
+function populateDatalists(){
+  const set=(id,field)=>{
+    const vals=[...new Set(QUESTIONS.map(q=>q[field]).filter(Boolean))].sort();
+    document.getElementById(id).innerHTML = vals.map(v=>`<option value="${v}">`).join('');
+  };
+  set('subjList','subject'); set('topList','topic'); set('subtopList','subtopic');
+  const typeFilter=document.getElementById('typeFilter');
+  const types=[...new Set(QUESTIONS.map(q=>q.question_type).filter(Boolean))].sort();
+  typeFilter.innerHTML = '<option value="">Any</option>'+types.map(t=>`<option>${t}</option>`).join('');
+}
+
+/* ---------- GENERATE CONTROLS ---------- */
+function uniq(field){return [...new Set(QUESTIONS.map(q=>q[field]).filter(Boolean))].sort();}
+
+function buildGenControls(){
+  const box=document.getElementById('subjectControls');box.innerHTML='';
+  uniq('subject').forEach(sub=>{
+    const block=document.createElement('div');block.className='subj-block panel';block.style.background='#fbfdfc';
+    block.innerHTML=`<strong>${sub}</strong>`;
+    const topics=[...new Set(QUESTIONS.filter(q=>q.subject===sub).map(q=>q.topic).filter(Boolean))].sort();
+    const topicList=topics.length?topics:[''];
+    topicList.forEach(t=>{
+      const subs=[...new Set(QUESTIONS.filter(q=>q.subject===sub&&q.topic===t&&q.subtopic).map(q=>q.subtopic))].sort();
+      const tWrap=document.createElement('div');tWrap.style.cssText='margin-top:12px';
+      tWrap.innerHTML=`<div style="font-size:13px;font-weight:600;color:#5b6479;margin-bottom:6px">${t||'(no topic)'}</div>`;
+      const rowWrap=document.createElement('div');rowWrap.style.cssText='display:flex;flex-wrap:wrap;gap:14px';
+      const availAll=QUESTIONS.filter(q=>q.subject===sub&&q.topic===t).length;
+      const fAll=document.createElement('div');fAll.className='field';
+      fAll.innerHTML=`<label>${subs.length?'Any subtopic':'Questions'} <span class="count">(${availAll})</span></label>
+        <input type="number" min="0" max="${availAll}" value="0" data-sub="${sub}" data-top="${t}" data-subtop="" style="width:100px">`;
+      rowWrap.appendChild(fAll);
+      subs.forEach(st=>{
+        const avail=QUESTIONS.filter(q=>q.subject===sub&&q.topic===t&&q.subtopic===st).length;
+        const f=document.createElement('div');f.className='field';
+        f.innerHTML=`<label>↳ ${st} <span class="count">(${avail})</span></label>
+          <input type="number" min="0" max="${avail}" value="0" data-sub="${sub}" data-top="${t}" data-subtop="${st}" style="width:90px">`;
+        rowWrap.appendChild(f);
+      });
+      tWrap.appendChild(rowWrap);block.appendChild(tWrap);
+    });
+    box.appendChild(block);
+  });
+}
+
+function resetPicks(){document.querySelectorAll('#subjectControls input[type=number]').forEach(i=>i.value=0);}
+
+/* ---------- GENERATE PAPER ---------- */
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+async function generatePaper(){
+  const diff=document.getElementById('diffFilter').value;
+  const qtype=document.getElementById('typeFilter').value;
+  const picks=[];
+  const used=new Set();
+  const inputs=[...document.querySelectorAll('#subjectControls input[type=number]')];
+  inputs.sort((a,b)=>(a.dataset.subtop?0:1)-(b.dataset.subtop?0:1));
+  inputs.forEach(inp=>{
+    const n=parseInt(inp.value)||0;if(n<=0)return;
+    const sub=inp.dataset.sub,top=inp.dataset.top,subtop=inp.dataset.subtop;
+    let pool=QUESTIONS.filter(q=>
+      q.subject===sub&&(q.topic||'')===top&&
+      (subtop===''||q.subtopic===subtop)&&
+      (!diff||q.difficulty===diff)&&
+      (!qtype||q.question_type===qtype)&&
+      !used.has(q));
+    pool=shuffle(pool.slice()).slice(0,n);
+    pool.forEach(q=>used.add(q));
+    picks.push(...pool);
+  });
+  if(!picks.length){toast('Set at least one count above zero.');return;}
+
+  const bySub={};picks.forEach(q=>{(bySub[q.subject]=bySub[q.subject]||[]).push(q);});
+  const title=document.getElementById('paperTitle').value||'Practice Paper';
+  const marks=document.getElementById('paperMarks').value;
+  const date=new Date().toLocaleDateString();
+
+  let html=`<div class="paper-head"><h1>${title}</h1>
+    <div class="meta">Date: ${date} &nbsp;·&nbsp; Questions: ${picks.length}${marks?' &nbsp;·&nbsp; Total Marks: '+marks:''}</div></div>`;
+  let n=1;
+  Object.keys(bySub).forEach(sub=>{
+    html+=`<h2 style="border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:24px">${sub}</h2>`;
+    bySub[sub].forEach(q=>{
+      const tlabel=[q.topic,q.subtopic].filter(Boolean).join(' › ');
+      const tags=[tlabel,q.question_type,q.marks?q.marks+' marks':''].filter(Boolean).join(' · ');
+      html+=`<div class="q"><span class="qnum">Q${n}.</span>
+        ${tags?'<span class="qtopic">['+tags+']</span>':''}
+        ${q.question_text?'<div class="qtext">'+q.question_text+'</div>':''}
+        ${q.image_url?'<img src="'+q.image_url+'" alt="question image">':''}</div>`;
+      n++;
+    });
+  });
+  document.getElementById('paper').innerHTML=html;
+  document.getElementById('paperActions').style.display='block';
+  document.getElementById('paperActions').scrollIntoView({behavior:'smooth'});
+
+  // bump use_count for picked questions
+  document.getElementById('genStatus').textContent='Updating usage counts…';
+  for(const q of picks){
+    await sb.from('questions').update({use_count: (q.use_count||0)+1}).eq('id', q.id);
+    q.use_count = (q.use_count||0)+1;
+  }
+  document.getElementById('genStatus').textContent='';
+  renderLibrary();
+}
+
+/* ---------- LIBRARY ---------- */
+async function deleteQuestion(id, imageUrl){
+  if(!confirm('Delete this question permanently?')) return;
+  await sb.from('questions').delete().eq('id', id);
+  if(imageUrl){
+    const parts = imageUrl.split('/question-images/');
+    if(parts[1]) await sb.storage.from('question-images').remove([parts[1]]);
+  }
+  toast('Deleted.');
+  await loadQuestions();
+}
+
+function renderLibrary(){
+  const search = (document.getElementById('libSearch')?.value||'').toLowerCase();
+  const tb=document.querySelector('#libTable tbody');tb.innerHTML='';
+  const filtered = QUESTIONS.filter(q=>{
+    if(!search) return true;
+    return [q.subject,q.topic,q.subtopic,q.source,q.question_type].filter(Boolean).join(' ').toLowerCase().includes(search);
+  });
+  filtered.forEach(q=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${q.image_url?'<img class="thumb" src="'+q.image_url+'">':''}</td>
+      <td>${q.subject}</td><td>${q.topic||''}</td><td>${q.subtopic||''}</td>
+      <td>${q.question_type?'<span class="chip">'+q.question_type+'</span>':''}</td>
+      <td>${q.difficulty||''}</td><td>${q.marks||''}</td>
+      <td style="max-width:140px">${q.source||''}</td>
+      <td>${q.use_count||0}</td>
+      <td><button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button></td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('libCount').textContent='('+filtered.length+' of '+QUESTIONS.length+')';
+}
+
+/* ---------- INIT ---------- */
+loadQuestions();
+</script>
+</body>
+</html>
