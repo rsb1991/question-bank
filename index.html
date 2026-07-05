@@ -130,17 +130,14 @@
       <div class="field">
         <label>Subject *</label>
         <select id="fSubject" onchange="addCascade('subject')" style="min-width:150px"></select>
-        <input type="text" id="fSubjectNew" placeholder="Type new subject" style="display:none;min-width:150px">
       </div>
       <div class="field">
         <label>Topic</label>
         <select id="fTopic" onchange="addCascade('topic')" style="min-width:160px"></select>
-        <input type="text" id="fTopicNew" placeholder="Type new topic" style="display:none;min-width:160px">
       </div>
       <div class="field">
         <label>Subtopic</label>
-        <select id="fSubtopic" onchange="addCascade('subtopic')" style="min-width:160px"></select>
-        <input type="text" id="fSubtopicNew" placeholder="Type new subtopic" style="display:none;min-width:160px">
+        <select id="fSubtopic" style="min-width:160px"></select>
       </div>
     </div>
     <div class="row" style="margin-top:12px">
@@ -250,8 +247,8 @@
   <div class="panel">
     <h2>Your question library <span class="count" id="libCount"></span></h2>
     <div class="row" style="margin-bottom:12px">
-      <div class="field"><label>Subject</label><select id="flSubject" onchange="renderLibrary()"><option value="">All</option></select></div>
-      <div class="field"><label>Topic</label><select id="flTopic" onchange="renderLibrary()"><option value="">All</option></select></div>
+      <div class="field"><label>Subject</label><select id="flSubject" onchange="libCascade('subject')"><option value="">All</option></select></div>
+      <div class="field"><label>Topic</label><select id="flTopic" onchange="libCascade('topic')"><option value="">All</option></select></div>
       <div class="field"><label>Subtopic</label><select id="flSubtopic" onchange="renderLibrary()"><option value="">All</option></select></div>
       <div class="field"><label>Type</label><select id="flType" onchange="renderLibrary()"><option value="">All</option></select></div>
       <div class="field"><label>Difficulty</label><select id="flDiff" onchange="renderLibrary()"><option value="">All</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
@@ -631,20 +628,68 @@ async function loadQuestions(){
   document.getElementById('connStatus').textContent = QUESTIONS.length+' questions in bank';
   populateDatalists();
   buildGenControls();
-  renderLibrary();
+  populateLibFilters();
   renderCart();
 }
 
 function populateDatalists(){
-  const set=(id,field)=>{
-    const vals=[...new Set(QUESTIONS.map(q=>q[field]).filter(Boolean))].sort();
-    document.getElementById(id).innerHTML = vals.map(v=>`<option value="${v}">`).join('');
-  };
-  set('subjList','subject'); set('topList','topic'); set('subtopList','subtopic');
   const typeFilter=document.getElementById('typeFilter');
   const types=[...new Set(QUESTIONS.map(q=>q.question_type).filter(Boolean))].sort();
   typeFilter.innerHTML = '<option value="">Any</option>'+types.map(t=>`<option>${t}</option>`).join('');
+  fillAddSubjectDropdown();
 }
+
+function fillAddSubjectDropdown(){
+  const s=document.getElementById('fSubject');
+  const cur=s.value;
+  s.innerHTML=uniq('subject').map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New subject…</option>';
+  s.value=[...s.options].some(o=>o.value===cur)?cur:'';
+  addCascade('subject', true);
+}
+
+function addCascade(level, keep){
+  const subSel=document.getElementById('fSubject');
+  const sub = subSel.value==='__new__' ? '' : subSel.value;
+  const top=document.getElementById('fTopic');
+  const stp=document.getElementById('fSubtopic');
+  if(level==='subject'){
+    if(subSel.value==='__new__'){
+      const name=(prompt('Enter new subject name:')||'').trim();
+      if(name){
+        const opt=document.createElement('option'); opt.textContent=name; opt.value=name;
+        subSel.insertBefore(opt, subSel.lastElementChild);
+        subSel.value=name;
+      } else { subSel.value=''; }
+    }
+    const curT=keep?top.value:'';
+    const topics=[...new Set(QUESTIONS.filter(q=>q.subject===subSel.value).map(q=>q.topic).filter(Boolean))].sort();
+    top.innerHTML='<option value="">—</option>'+topics.map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New topic…</option>';
+    top.value=[...top.options].some(o=>o.value===curT)?curT:'';
+  }
+  if(top.value==='__new__'){
+    const name=(prompt('Enter new topic name:')||'').trim();
+    if(name){
+      const opt=document.createElement('option'); opt.textContent=name; opt.value=name;
+      top.insertBefore(opt, top.lastElementChild);
+      top.value=name;
+    } else { top.value=''; }
+  }
+  const curS=keep?stp.value:'';
+  const t=top.value;
+  const subs=[...new Set(QUESTIONS.filter(q=>q.subject===subSel.value&&(!t||q.topic===t)&&q.subtopic).map(q=>q.subtopic))].sort();
+  stp.innerHTML='<option value="">—</option>'+subs.map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New subtopic…</option>';
+  stp.value=[...stp.options].some(o=>o.value===curS)?curS:'';
+}
+document.getElementById('fSubtopic').addEventListener('change',function(){
+  if(this.value==='__new__'){
+    const name=(prompt('Enter new subtopic name:')||'').trim();
+    if(name){
+      const opt=document.createElement('option'); opt.textContent=name; opt.value=name;
+      this.insertBefore(opt, this.lastElementChild);
+      this.value=name;
+    } else { this.value=''; }
+  }
+});
 
 /* ---------- GENERATE: CASCADING + BROWSE + CART ---------- */
 function uniq(field){return [...new Set(QUESTIONS.map(q=>q[field]).filter(Boolean))].sort();}
@@ -818,7 +863,26 @@ function populateLibFilters(){
     el.innerHTML='<option value="">All</option>'+vals.map(v=>`<option>${v}</option>`).join('');
     el.value=cur;
   };
-  fill('flSubject','subject');fill('flTopic','topic');fill('flSubtopic','subtopic');fill('flType','question_type');
+  fill('flSubject','subject');fill('flType','question_type');
+  libCascade('subject', true);
+}
+
+function libCascade(level, keep){
+  const sub=document.getElementById('flSubject').value;
+  const top=document.getElementById('flTopic');
+  const stp=document.getElementById('flSubtopic');
+  if(level==='subject'){
+    const curT=keep?top.value:'';
+    const topics=[...new Set(QUESTIONS.filter(q=>!sub||q.subject===sub).map(q=>q.topic).filter(Boolean))].sort();
+    top.innerHTML='<option value="">All</option>'+topics.map(v=>`<option>${v}</option>`).join('');
+    top.value=[...top.options].some(o=>o.value===curT)?curT:'';
+  }
+  const curS=keep?stp.value:'';
+  const t=top.value;
+  const subs=[...new Set(QUESTIONS.filter(q=>(!sub||q.subject===sub)&&(!t||q.topic===t)&&q.subtopic).map(q=>q.subtopic))].sort();
+  stp.innerHTML='<option value="">All</option>'+subs.map(v=>`<option>${v}</option>`).join('');
+  stp.value=[...stp.options].some(o=>o.value===curS)?curS:'';
+  renderLibrary();
 }
 
 function clearFilters(){
@@ -828,7 +892,6 @@ function clearFilters(){
 }
 
 function renderLibrary(){
-  populateLibFilters();
   const v=id=>document.getElementById(id)?.value||'';
   const search=v('libSearch').toLowerCase();
   const tb=document.querySelector('#libTable tbody');tb.innerHTML='';
