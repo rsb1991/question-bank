@@ -52,6 +52,7 @@
   .count{font-size:13px;color:var(--ink-soft)}
   .subj-block{margin-bottom:12px}
   .two-col{display:flex;flex-direction:column;gap:14px}
+  @media (max-width:680px){.inline-qcol,.inline-pcol{flex:1 1 100%!important;max-width:100%!important}}
   .thumb{width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
   /* PASTE ZONE */
   .pastezone{
@@ -983,8 +984,8 @@ function inlineCardHTML(q, num, inCart){
       <option ${(!q.question_type||q.question_type==='Other')?'selected':''}>Other</option>
     </select>
   </div>
-  <div class="row" style="gap:16px;align-items:flex-start;flex-wrap:wrap">
-    <div class="inline-qcol" style="flex:1;min-width:280px">
+  <div class="row" style="gap:16px;align-items:flex-start;flex-wrap:nowrap">
+    <div class="inline-qcol" style="flex:1;min-width:0">
       <div class="field" style="margin-bottom:8px">
         <label>Question text</label>
         <textarea id="iText-${q.id}" rows="4" oninput="livePreviewInline(${q.id})">${(q.question_text||'').replace(/</g,'&lt;')}</textarea>
@@ -1022,7 +1023,7 @@ function inlineCardHTML(q, num, inCart){
       </div>
       <div class="count" style="margin-top:4px">${[q.topic,q.subtopic,q.difficulty,'used '+(q.use_count||0)+'×'].filter(Boolean).join(' · ')}</div>
     </div>
-    <div class="inline-pcol" style="flex:1;min-width:280px">
+    <div class="inline-pcol" style="flex:1;min-width:0">
       <label class="count" style="display:block;margin-bottom:6px">Student preview</label>
       <div id="iPreview-${q.id}" style="border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff"></div>
       <div id="iStatus-${q.id}" class="count" style="margin-top:6px"></div>
