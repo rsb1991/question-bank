@@ -129,18 +129,18 @@
     <div class="row">
       <div class="field">
         <label>Subject *</label>
-        <input list="subjList" id="fSubject" placeholder="Physics" style="width:160px">
-        <datalist id="subjList"></datalist>
+        <select id="fSubject" onchange="addCascade('subject')" style="min-width:150px"></select>
+        <input type="text" id="fSubjectNew" placeholder="Type new subject" style="display:none;min-width:150px">
       </div>
       <div class="field">
         <label>Topic</label>
-        <input list="topList" id="fTopic" placeholder="Kinematics" style="width:170px">
-        <datalist id="topList"></datalist>
+        <select id="fTopic" onchange="addCascade('topic')" style="min-width:160px"></select>
+        <input type="text" id="fTopicNew" placeholder="Type new topic" style="display:none;min-width:160px">
       </div>
       <div class="field">
         <label>Subtopic</label>
-        <input list="subtopList" id="fSubtopic" placeholder="Projectile" style="width:170px">
-        <datalist id="subtopList"></datalist>
+        <select id="fSubtopic" onchange="addCascade('subtopic')" style="min-width:160px"></select>
+        <input type="text" id="fSubtopicNew" placeholder="Type new subtopic" style="display:none;min-width:160px">
       </div>
     </div>
     <div class="row" style="margin-top:12px">
@@ -188,21 +188,51 @@
 
 <!-- ================= GENERATE TAB ================= -->
 <div id="pane-gen">
-  <div class="help"><strong>Generate a paper:</strong> set how many questions you want per topic/subtopic, then click Generate. Use Print → Save as PDF to download.</div>
+  <div class="help"><strong>Build a paper:</strong> pick Subject → Topic → Subtopic, then either browse &amp; tick questions, or auto-add N random ones. Review/edit everything in "Selected questions" before generating.</div>
 
   <div class="panel">
-    <h2>Paper settings</h2>
-    <div class="row" style="margin-bottom:16px">
+    <h2>1 · Pick questions</h2>
+    <div class="row" style="margin-bottom:12px">
+      <div class="field"><label>Subject</label><select id="gSubject" onchange="cascade('subject')"><option value="">—</option></select></div>
+      <div class="field"><label>Topic</label><select id="gTopic" onchange="cascade('topic')"><option value="">All</option></select></div>
+      <div class="field"><label>Subtopic</label><select id="gSubtopic" onchange="renderBrowse()"><option value="">All</option></select></div>
+      <div class="field"><label>Difficulty</label><select id="diffFilter" onchange="renderBrowse()"><option value="">Any</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
+      <div class="field"><label>Type</label><select id="typeFilter" onchange="renderBrowse()"><option value="">Any</option></select></div>
+      <div class="field"><label>Medium</label><select id="mediumFilter" onchange="renderBrowse()"><option value="">Any</option><option>English</option><option>Hindi</option></select></div>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <div class="field"><label>Auto-add random</label>
+        <div class="row">
+          <input type="number" id="autoN" min="1" value="5" style="width:80px">
+          <button class="ghost" onclick="autoAdd()">＋ Add random</button>
+        </div>
+      </div>
+      <span class="count" id="browseCount" style="margin-top:20px"></span>
+    </div>
+    <div id="browseList"></div>
+  </div>
+
+  <div class="panel" id="cartPanel">
+    <div class="row" style="margin-bottom:10px">
+      <h2 style="margin:0">2 · Selected questions <span class="count" id="cartCount">(0)</span></h2>
+      <button style="margin-left:auto" onclick="saveAllCart()">💾 Save all edits</button>
+    </div>
+    <div id="cartList"><p class="count">Nothing selected yet.</p></div>
+    <div class="row" style="margin-top:10px">
+      <button onclick="saveAllCart()">💾 Save all edits</button>
+      <span class="count" id="saveAllStatus"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>3 · Paper settings</h2>
+    <div class="row" style="margin-bottom:12px">
       <div class="field"><label>Paper title</label><input type="text" id="paperTitle" value="Practice Paper" style="min-width:220px"></div>
       <div class="field"><label>Total marks (optional)</label><input type="text" id="paperMarks" placeholder="e.g. 100" style="width:130px"></div>
-      <div class="field"><label>Difficulty</label><select id="diffFilter"><option value="">Any</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
-      <div class="field"><label>Question type</label><select id="typeFilter"><option value="">Any</option></select></div>
-      <div class="field"><label>Medium</label><select id="mediumFilter"><option value="">Any</option><option>English</option><option>Hindi</option></select></div>
     </div>
-    <div id="subjectControls"></div>
-    <div class="row" style="margin-top:8px">
-      <button onclick="generatePaper()">Generate Paper</button>
-      <button class="ghost" onclick="resetPicks()">Reset counts</button>
+    <div class="row">
+      <button onclick="generatePaper()">Generate Final Paper</button>
+      <button class="ghost" onclick="clearCart()">Clear selection</button>
       <span class="count" id="genStatus"></span>
     </div>
   </div>
@@ -210,9 +240,8 @@
   <div id="paper"></div>
   <div class="panel noprint" id="paperActions" style="display:none">
     <h2>Your paper is ready</h2>
-    <p class="count">This will increase the "use count" of each question picked, so you can track how often it's been asked.</p>
+    <p class="count">Use count of each included question has been increased.</p>
     <button onclick="window.print()">Print / Save as PDF</button>
-    <button class="ghost" onclick="generatePaper()">Re-roll (new random pick)</button>
   </div>
 </div>
 
@@ -241,34 +270,103 @@
       </table>
     </div>
   </div>
+</div>
 
-  <!-- QUESTION EDITOR -->
-  <div class="panel" id="editPanel" style="display:none;border-color:var(--accent)">
-    <h2>✏️ Edit question <span class="count" id="editId"></span></h2>
-    <div class="field" style="margin-bottom:12px">
-      <label>Question text</label>
-      <textarea id="eText" rows="4"></textarea>
+<!-- QUESTION EDITOR (shared: Library + Selected questions) -->
+<div class="panel" id="editPanel" style="display:none;border-color:var(--accent)">
+  <div class="row" style="margin-bottom:10px">
+    <h2 style="margin:0">✏️ Edit question <span class="count" id="editId"></span></h2>
+    <button style="margin-left:auto" onclick="saveEdit()">💾 Save this question</button>
+  </div>
+
+  <div class="row" style="margin-bottom:12px">
+    <div class="field">
+      <label>Subject</label>
+      <select id="eSubject" onchange="editCascade('subject')"></select>
     </div>
-    <div class="field" style="margin-bottom:12px">
-      <label>Image — paste (Cmd+V), or use buttons</label>
-      <div class="pastezone" id="editPasteZone" tabindex="0"><span>Click here, then paste an image — or use buttons below</span></div>
-      <div class="row" style="margin-top:8px">
-        <label for="editPhotoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📷 Camera / Photos</label>
-        <input type="file" id="editPhotoPick" accept="image/*" style="display:none">
-        <label for="editFilePick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📁 Choose file</label>
-        <input type="file" id="editFilePick" accept="image/*" style="display:none">
-        <button class="danger mini" onclick="removeEditImage()">Remove image</button>
-      </div>
+    <div class="field">
+      <label>Topic</label>
+      <select id="eTopic" onchange="editCascade('topic')"></select>
     </div>
-    <div class="field" style="margin-bottom:12px">
-      <label>Image size on paper: <span id="eWidthVal">100</span>% width</label>
-      <input type="range" id="eWidth" min="20" max="100" step="5" value="100" oninput="document.getElementById('eWidthVal').textContent=this.value;previewEditWidth()">
+    <div class="field">
+      <label>Subtopic</label>
+      <select id="eSubtopic"></select>
     </div>
-    <div class="row">
-      <button onclick="saveEdit()">Save changes</button>
-      <button class="ghost" onclick="closeEdit()">Cancel</button>
-      <span class="count" id="editStatus"></span>
+    <div class="field">
+      <label>Question type</label>
+      <select id="eType" onchange="onTypeChange()">
+        <option>MCQ</option><option>Numerical</option><option>Graphical</option>
+        <option>Assertion Reason</option><option>Match the Column</option>
+        <option>Statement Type</option><option>Numerical Value</option>
+        <option>True or False</option><option>Other</option>
+      </select>
     </div>
+    <div class="field">
+      <label>Difficulty</label>
+      <select id="eDiff"><option value="">—</option><option>Easy</option><option>Medium</option><option>Tough</option></select>
+    </div>
+    <div class="field">
+      <label>Marks</label>
+      <input type="number" id="eMarks" style="width:80px">
+    </div>
+  </div>
+
+  <div class="field" style="margin-bottom:12px">
+    <label>Question text <span id="eTextSizeLbl" class="count">(100%)</span></label>
+    <textarea id="eText" rows="3" oninput="livePreview()"></textarea>
+    <input type="range" id="eTextSize" min="60" max="160" step="5" value="100" oninput="document.getElementById('eTextSizeLbl').textContent='('+this.value+'%)';livePreview()">
+  </div>
+
+  <div class="field" style="margin-bottom:12px">
+    <label>Question image — paste (Cmd+V), or use buttons</label>
+    <div class="pastezone" id="editPasteZone" tabindex="0"><span>Click here, then paste an image — or use buttons below</span></div>
+    <div class="row" style="margin-top:8px">
+      <label for="editPhotoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📷 Camera / Photos</label>
+      <input type="file" id="editPhotoPick" accept="image/*" style="display:none">
+      <label for="editFilePick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📁 Choose file</label>
+      <input type="file" id="editFilePick" accept="image/*" style="display:none">
+      <button class="danger mini" onclick="removeEditImage()">Remove image</button>
+    </div>
+    <div class="field" style="margin-top:8px">
+      <label>Image size: <span id="eWidthVal">100</span>% width</label>
+      <input type="range" id="eWidth" min="20" max="100" step="5" value="100" oninput="document.getElementById('eWidthVal').textContent=this.value;previewEditWidth();livePreview()">
+    </div>
+  </div>
+
+  <!-- MCQ / TRUE-FALSE OPTIONS -->
+  <div class="field" id="optionsBlock" style="margin-bottom:12px;display:none">
+    <label>Options</label>
+    <div id="optionsList"></div>
+    <button class="ghost mini" onclick="addOption()">＋ Add option</button>
+    <button class="ghost mini" onclick="aiOptions()">🤖 AI-generate 4 options (~₹0.5–2)</button>
+  </div>
+
+  <!-- MATCH THE COLUMN -->
+  <div class="field" id="matchBlock" style="margin-bottom:12px;display:none">
+    <label>Match the Column</label>
+    <div class="row" style="margin-bottom:8px">
+      <input type="text" id="matchColA" placeholder="Column A title (e.g. Column I)" style="min-width:160px" oninput="livePreview()">
+      <input type="text" id="matchColB" placeholder="Column B title (e.g. Column II)" style="min-width:160px" oninput="livePreview()">
+    </div>
+    <div id="matchRows"></div>
+    <button class="ghost mini" onclick="addMatchRow()">＋ Add row</button>
+  </div>
+
+  <div class="field" style="margin-bottom:12px">
+    <label>Correct answer</label>
+    <input type="text" id="eAnswer" placeholder="e.g. (b), or A-3,B-1,C-4,D-2" oninput="livePreview()">
+  </div>
+
+  <div class="field" style="margin-bottom:16px">
+    <label>Live preview (as it appears on the generated paper)</label>
+    <button class="ghost mini" style="margin-bottom:8px" onclick="livePreview()">🔄 Refresh preview</button>
+    <div id="editPreview" style="border:1px solid var(--line);border-radius:10px;padding:16px;background:#fff"></div>
+  </div>
+
+  <div class="row">
+    <button onclick="saveEdit()">💾 Save this question</button>
+    <button class="ghost" onclick="closeEdit()">Cancel</button>
+    <span class="count" id="editStatus"></span>
   </div>
 </div>
 
@@ -534,6 +632,7 @@ async function loadQuestions(){
   populateDatalists();
   buildGenControls();
   renderLibrary();
+  renderCart();
 }
 
 function populateDatalists(){
@@ -547,67 +646,123 @@ function populateDatalists(){
   typeFilter.innerHTML = '<option value="">Any</option>'+types.map(t=>`<option>${t}</option>`).join('');
 }
 
-/* ---------- GENERATE CONTROLS ---------- */
+/* ---------- GENERATE: CASCADING + BROWSE + CART ---------- */
 function uniq(field){return [...new Set(QUESTIONS.map(q=>q[field]).filter(Boolean))].sort();}
 
+let CART = []; // question ids in paper order
+
 function buildGenControls(){
-  const box=document.getElementById('subjectControls');box.innerHTML='';
-  uniq('subject').forEach(sub=>{
-    const block=document.createElement('div');block.className='subj-block panel';block.style.background='#fbfdfc';
-    block.innerHTML=`<strong>${sub}</strong>`;
-    const topics=[...new Set(QUESTIONS.filter(q=>q.subject===sub).map(q=>q.topic).filter(Boolean))].sort();
-    const topicList=topics.length?topics:[''];
-    topicList.forEach(t=>{
-      const subs=[...new Set(QUESTIONS.filter(q=>q.subject===sub&&q.topic===t&&q.subtopic).map(q=>q.subtopic))].sort();
-      const tWrap=document.createElement('div');tWrap.style.cssText='margin-top:12px';
-      tWrap.innerHTML=`<div style="font-size:13px;font-weight:600;color:#5b6479;margin-bottom:6px">${t||'(no topic)'}</div>`;
-      const rowWrap=document.createElement('div');rowWrap.style.cssText='display:flex;flex-wrap:wrap;gap:14px';
-      const availAll=QUESTIONS.filter(q=>q.subject===sub&&q.topic===t).length;
-      const fAll=document.createElement('div');fAll.className='field';
-      fAll.innerHTML=`<label>${subs.length?'Any subtopic':'Questions'} <span class="count">(${availAll})</span></label>
-        <input type="number" min="0" max="${availAll}" value="0" data-sub="${sub}" data-top="${t}" data-subtop="" style="width:100px">`;
-      rowWrap.appendChild(fAll);
-      subs.forEach(st=>{
-        const avail=QUESTIONS.filter(q=>q.subject===sub&&q.topic===t&&q.subtopic===st).length;
-        const f=document.createElement('div');f.className='field';
-        f.innerHTML=`<label>↳ ${st} <span class="count">(${avail})</span></label>
-          <input type="number" min="0" max="${avail}" value="0" data-sub="${sub}" data-top="${t}" data-subtop="${st}" style="width:90px">`;
-        rowWrap.appendChild(f);
-      });
-      tWrap.appendChild(rowWrap);block.appendChild(tWrap);
-    });
-    box.appendChild(block);
-  });
+  const s=document.getElementById('gSubject'); const cur=s.value;
+  s.innerHTML='<option value="">—</option>'+uniq('subject').map(v=>`<option>${v}</option>`).join('');
+  s.value=cur;
+  cascade('subject', true);
 }
 
-function resetPicks(){document.querySelectorAll('#subjectControls input[type=number]').forEach(i=>i.value=0);}
+function cascade(level, keep){
+  const sub=document.getElementById('gSubject').value;
+  const top=document.getElementById('gTopic');
+  const stp=document.getElementById('gSubtopic');
+  if(level==='subject'){
+    const curT=keep?top.value:'';
+    const topics=[...new Set(QUESTIONS.filter(q=>q.subject===sub).map(q=>q.topic).filter(Boolean))].sort();
+    top.innerHTML='<option value="">All</option>'+topics.map(v=>`<option>${v}</option>`).join('');
+    top.value=curT;
+  }
+  const curS=keep?stp.value:'';
+  const t=top.value;
+  const subs=[...new Set(QUESTIONS.filter(q=>q.subject===sub&&(!t||q.topic===t)&&q.subtopic).map(q=>q.subtopic))].sort();
+  stp.innerHTML='<option value="">All</option>'+subs.map(v=>`<option>${v}</option>`).join('');
+  stp.value=curS;
+  renderBrowse();
+}
 
-/* ---------- GENERATE PAPER ---------- */
+function browsePool(){
+  const v=id=>document.getElementById(id).value;
+  const sub=v('gSubject');
+  if(!sub) return [];
+  return QUESTIONS.filter(q=>
+    q.subject===sub&&
+    (!v('gTopic')||q.topic===v('gTopic'))&&
+    (!v('gSubtopic')||q.subtopic===v('gSubtopic'))&&
+    (!v('diffFilter')||q.difficulty===v('diffFilter'))&&
+    (!v('typeFilter')||q.question_type===v('typeFilter'))&&
+    (!v('mediumFilter')||(q.medium||'English')===v('mediumFilter')));
+}
+
+function qPreviewHTML(q){
+  const meta=[q.topic,q.subtopic,q.question_type,q.difficulty,(q.marks?q.marks+'m':''),'used '+(q.use_count||0)+'×'].filter(Boolean).join(' · ');
+  const txt=q.question_text?`<div class="${q.is_krutidev?'krutidev':''}" style="white-space:pre-wrap;margin-top:4px">${q.question_text.replace(/</g,'&lt;')}</div>`:'';
+  const img=q.image_url?`<img src="${q.image_url}" style="max-width:200px;margin-top:6px;border-radius:6px;border:1px solid var(--line)">`:'';
+  return `<div class="count">${meta}</div>${txt}${img}`;
+}
+
+function renderBrowse(){
+  const pool=browsePool();
+  document.getElementById('browseCount').textContent=document.getElementById('gSubject').value?pool.length+' matching question(s)':'';
+  const box=document.getElementById('browseList');box.innerHTML='';
+  pool.forEach(q=>{
+    const inCart=CART.includes(q.id);
+    const d=document.createElement('div');
+    d.className='panel'; d.style.cssText='background:#fbfdfc;padding:12px;margin-bottom:10px';
+    d.innerHTML=`<div class="row" style="align-items:flex-start">
+      <input type="checkbox" style="width:auto;margin-top:4px" ${inCart?'checked':''} onchange="toggleCart(${q.id},this.checked)">
+      <div style="flex:1">${qPreviewHTML(q)}</div></div>`;
+    box.appendChild(d);
+  });
+  renderMath(box);
+}
+
+function toggleCart(id,on){
+  if(on){ if(!CART.includes(id)) CART.push(id); }
+  else CART=CART.filter(x=>x!==id);
+  renderCart();
+}
+
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
-async function generatePaper(){
-  const diff=document.getElementById('diffFilter').value;
-  const qtype=document.getElementById('typeFilter').value;
-  const medium=document.getElementById('mediumFilter').value;
-  const picks=[];
-  const used=new Set();
-  const inputs=[...document.querySelectorAll('#subjectControls input[type=number]')];
-  inputs.sort((a,b)=>(a.dataset.subtop?0:1)-(b.dataset.subtop?0:1));
-  inputs.forEach(inp=>{
-    const n=parseInt(inp.value)||0;if(n<=0)return;
-    const sub=inp.dataset.sub,top=inp.dataset.top,subtop=inp.dataset.subtop;
-    let pool=QUESTIONS.filter(q=>
-      q.subject===sub&&(q.topic||'')===top&&
-      (subtop===''||q.subtopic===subtop)&&
-      (!diff||q.difficulty===diff)&&
-      (!qtype||q.question_type===qtype)&&
-      (!medium||(q.medium||'English')===medium)&&
-      !used.has(q));
-    pool=shuffle(pool.slice()).slice(0,n);
-    pool.forEach(q=>used.add(q));
-    picks.push(...pool);
+function autoAdd(){
+  const n=parseInt(document.getElementById('autoN').value)||0;
+  if(!document.getElementById('gSubject').value){toast('Pick a Subject first.');return;}
+  if(n<=0){toast('Enter how many to add.');return;}
+  const pool=shuffle(browsePool().filter(q=>!CART.includes(q.id)).slice());
+  const take=pool.slice(0,n);
+  take.forEach(q=>CART.push(q.id));
+  if(take.length<n) toast('Only '+take.length+' available — added those.');
+  renderBrowse(); renderCart();
+}
+
+function clearCart(){CART=[];renderBrowse();renderCart();}
+
+function renderCart(){
+  document.getElementById('cartCount').textContent='('+CART.length+')';
+  const box=document.getElementById('cartList');box.innerHTML='';
+  if(!CART.length){box.innerHTML='<p class="count">Nothing selected yet.</p>';return;}
+  CART.forEach((id,i)=>{
+    const q=QUESTIONS.find(x=>x.id===id); if(!q) return;
+    const d=document.createElement('div');
+    d.className='panel'; d.style.cssText='background:#fbfdfc;padding:12px;margin-bottom:10px';
+    d.innerHTML=`<div class="row" style="margin-bottom:6px">
+        <strong>Q${i+1}</strong><span class="chip">${q.subject}</span>
+        <button class="ghost mini" onclick="openEdit(${q.id})">✏️ Edit</button>
+        <button class="ghost mini" onclick="moveCart(${i},-1)">↑</button>
+        <button class="ghost mini" onclick="moveCart(${i},1)">↓</button>
+        <button class="danger mini" style="margin-left:auto" onclick="toggleCart(${q.id},false)">Remove</button>
+      </div>${qPreviewHTML(q)}`;
+    box.appendChild(d);
   });
-  if(!picks.length){toast('Set at least one count above zero.');return;}
+  renderMath(box);
+}
+
+function moveCart(i,dir){
+  const j=i+dir; if(j<0||j>=CART.length)return;
+  [CART[i],CART[j]]=[CART[j],CART[i]];
+  renderCart();
+}
+
+/* ---------- GENERATE PAPER (from cart) ---------- */
+async function generatePaper(){
+  const picks=CART.map(id=>QUESTIONS.find(q=>q.id===id)).filter(Boolean);
+  if(!picks.length){toast('Select questions first (browse or auto-add).');return;}
 
   const bySub={};picks.forEach(q=>{(bySub[q.subject]=bySub[q.subject]||[]).push(q);});
   const title=document.getElementById('paperTitle').value||'Practice Paper';
@@ -622,10 +777,9 @@ async function generatePaper(){
     bySub[sub].forEach(q=>{
       const tlabel=[q.topic,q.subtopic].filter(Boolean).join(' › ');
       const tags=[tlabel,q.question_type,q.marks?q.marks+' marks':''].filter(Boolean).join(' · ');
-      html+=`<div class="q"><span class="qnum">Q${n}.</span>
-        ${tags?'<span class="qtopic">['+tags+']</span>':''}
-        ${q.question_text?'<div class="qtext'+(q.is_krutidev?' krutidev':'')+'">'+q.question_text.replace(/</g,'&lt;')+'</div>':''}
-        ${q.image_url?'<img src="'+q.image_url+'" style="width:'+(q.image_width||100)+'%" alt="question image">':''}</div>`;
+      html+=`<div style="margin-bottom:4px"><span class="qnum">Q${n}.</span>
+        ${tags?'<span class="qtopic">['+tags+']</span>':''}</div>
+        ${questionCardHTML(q)}`;
       n++;
     });
   });
@@ -707,15 +861,103 @@ function renderLibrary(){
 
 /* ---------- QUESTION EDITOR ---------- */
 let editQ=null, editBlob=null, editRemoveImage=false;
+let editOptions=[]; // [{label, text}]
+let editMatch=null; // {colA,colB,rows:[{left,right}]}
+
+function editCascade(level){
+  const sub=document.getElementById('eSubject').value;
+  const top=document.getElementById('eTopic');
+  const stp=document.getElementById('eSubtopic');
+  if(level==='subject'){
+    const topics=[...new Set(QUESTIONS.filter(q=>q.subject===sub).map(q=>q.topic).filter(Boolean))].sort();
+    top.innerHTML='<option value="">—</option>'+topics.map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New topic…</option>';
+  }
+  const t=top.value;
+  const subs=[...new Set(QUESTIONS.filter(q=>q.subject===sub&&(!t||q.topic===t)&&q.subtopic).map(q=>q.subtopic))].sort();
+  stp.innerHTML='<option value="">—</option>'+subs.map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New subtopic…</option>';
+}
+
+function fillEditSubjectDropdown(){
+  const s=document.getElementById('eSubject');
+  s.innerHTML=uniq('subject').map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New subject…</option>';
+}
+
+function onTypeChange(){
+  const t=document.getElementById('eType').value;
+  document.getElementById('optionsBlock').style.display = (t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type') ? 'block':'none';
+  document.getElementById('matchBlock').style.display = (t==='Match the Column') ? 'block':'none';
+  if((t==='MCQ') && editOptions.length===0){
+    editOptions=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
+  }
+  if(t==='True or False' && editOptions.length===0){
+    editOptions=[{label:'a',text:'True'},{label:'b',text:'False'}];
+  }
+  if(t==='Match the Column' && !editMatch){
+    editMatch={colA:'Column I',colB:'Column II',rows:[{left:'',right:''},{left:'',right:''}]};
+  }
+  renderOptions(); renderMatch(); livePreview();
+}
+
+function renderOptions(){
+  const box=document.getElementById('optionsList'); box.innerHTML='';
+  editOptions.forEach((o,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.style.marginBottom='6px';
+    row.innerHTML=`<span class="chip">(${o.label})</span>
+      <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="editOptions[${i}].text=this.value;livePreview()">
+      <button class="danger mini" onclick="editOptions.splice(${i},1);renderOptions();livePreview()">✕</button>`;
+    box.appendChild(row);
+  });
+}
+function addOption(){
+  const nextLabel=String.fromCharCode(97+editOptions.length);
+  editOptions.push({label:nextLabel,text:''});
+  renderOptions(); livePreview();
+}
+
+function renderMatch(){
+  if(!editMatch) return;
+  document.getElementById('matchColA').value=editMatch.colA;
+  document.getElementById('matchColB').value=editMatch.colB;
+  const box=document.getElementById('matchRows'); box.innerHTML='';
+  editMatch.rows.forEach((r,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.style.marginBottom='6px';
+    row.innerHTML=`<span class="chip">${i+1}</span>
+      <input type="text" placeholder="Left item" value="${(r.left||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="editMatch.rows[${i}].left=this.value;livePreview()">
+      <input type="text" placeholder="Right item" value="${(r.right||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="editMatch.rows[${i}].right=this.value;livePreview()">
+      <button class="danger mini" onclick="editMatch.rows.splice(${i},1);renderMatch();livePreview()">✕</button>`;
+    box.appendChild(row);
+  });
+}
+function addMatchRow(){ editMatch.rows.push({left:'',right:''}); renderMatch(); livePreview(); }
+document.getElementById('matchColA').addEventListener('input',e=>{if(editMatch){editMatch.colA=e.target.value;livePreview();}});
+document.getElementById('matchColB').addEventListener('input',e=>{if(editMatch){editMatch.colB=e.target.value;livePreview();}});
 
 function openEdit(id){
   editQ = QUESTIONS.find(q=>q.id===id); if(!editQ) return;
   editBlob=null; editRemoveImage=false;
+  editOptions = Array.isArray(editQ.options)&&editQ.options.length ? JSON.parse(JSON.stringify(editQ.options)) : [];
+  editMatch = editQ.match_data ? JSON.parse(JSON.stringify(editQ.match_data)) : null;
+
   document.getElementById('editPanel').style.display='block';
   document.getElementById('editId').textContent='#'+editQ.id;
+
+  fillEditSubjectDropdown();
+  document.getElementById('eSubject').value=editQ.subject||'';
+  editCascade('subject');
+  document.getElementById('eTopic').value=editQ.topic||'';
+  editCascade('topic');
+  document.getElementById('eSubtopic').value=editQ.subtopic||'';
+
+  document.getElementById('eType').value=editQ.question_type||'Other';
+  document.getElementById('eDiff').value=editQ.difficulty||'';
+  document.getElementById('eMarks').value=editQ.marks||'';
   document.getElementById('eText').value=editQ.question_text||'';
+  document.getElementById('eAnswer').value=editQ.answer||'';
+  document.getElementById('eTextSize').value=editQ.text_size||100;
+  document.getElementById('eTextSizeLbl').textContent='('+(editQ.text_size||100)+'%)';
   document.getElementById('eWidth').value=editQ.image_width||100;
   document.getElementById('eWidthVal').textContent=editQ.image_width||100;
+
   const z=document.getElementById('editPasteZone');
   if(editQ.image_url){
     z.classList.add('has-image');
@@ -724,6 +966,12 @@ function openEdit(id){
     z.classList.remove('has-image');
     z.innerHTML='<span>Click here, then paste an image — or use buttons below</span>';
   }
+
+  const t=editQ.question_type;
+  document.getElementById('optionsBlock').style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type')?'block':'none';
+  document.getElementById('matchBlock').style.display=(t==='Match the Column')?'block':'none';
+  renderOptions(); renderMatch();
+  livePreview();
   document.getElementById('editPanel').scrollIntoView({behavior:'smooth'});
 }
 
@@ -732,12 +980,14 @@ function setEditImage(blob){
   const z=document.getElementById('editPasteZone');
   z.classList.add('has-image');
   z.innerHTML=`<img id="editImgPreview" src="${URL.createObjectURL(blob)}" style="width:${document.getElementById('eWidth').value}%">`;
+  livePreview();
 }
 function removeEditImage(){
   editBlob=null; editRemoveImage=true;
   const z=document.getElementById('editPasteZone');
   z.classList.remove('has-image');
   z.innerHTML='<span>Image will be removed on save</span>';
+  livePreview();
 }
 function previewEditWidth(){
   const img=document.getElementById('editImgPreview');
@@ -760,12 +1010,69 @@ document.getElementById('editFilePick').addEventListener('change',e=>{
   const f=e.target.files[0]; if(f&&f.type.indexOf('image')===0) setEditImage(f); e.target.value='';
 });
 
+/* ---------- LIVE PREVIEW (matches generated-paper rendering) ---------- */
+function questionCardHTML(data){
+  const size=data.text_size||100;
+  let html=`<div class="q" style="font-size:${size}%">`;
+  if(data.question_text) html+=`<div class="qtext${data.is_krutidev?' krutidev':''}">${(data.question_text||'').replace(/</g,'&lt;')}</div>`;
+  if(data.image_url) html+=`<img src="${data.image_url}" style="width:${data.image_width||100}%">`;
+  if(data.question_type==='Match the Column' && data.match_data){
+    const m=data.match_data;
+    html+=`<table style="margin-top:8px;border-collapse:collapse;width:100%"><tr>
+      <th style="border:1px solid var(--line);padding:6px;text-align:left">${m.colA||'Column I'}</th>
+      <th style="border:1px solid var(--line);padding:6px;text-align:left">${m.colB||'Column II'}</th></tr>`;
+    (m.rows||[]).forEach((r,i)=>{
+      html+=`<tr><td style="border:1px solid var(--line);padding:6px">${i+1}. ${r.left||''}</td>
+        <td style="border:1px solid var(--line);padding:6px">${String.fromCharCode(65+i)}. ${r.right||''}</td></tr>`;
+    });
+    html+=`</table>`;
+  } else if(Array.isArray(data.options) && data.options.length){
+    html+=`<div style="margin-top:8px">`+data.options.map(o=>`(${o.label}) ${o.text||''}`).join('&nbsp;&nbsp;&nbsp;')+`</div>`;
+  }
+  html+=`</div>`;
+  return html;
+}
+
+function livePreview(){
+  const data={
+    question_text: document.getElementById('eText').value,
+    text_size: Number(document.getElementById('eTextSize').value)||100,
+    image_url: editRemoveImage?null:(editBlob?document.getElementById('editImgPreview')?.src:editQ?.image_url),
+    image_width: Number(document.getElementById('eWidth').value)||100,
+    question_type: document.getElementById('eType').value,
+    options: editOptions,
+    match_data: editMatch,
+    is_krutidev: editQ?.is_krutidev
+  };
+  const box=document.getElementById('editPreview');
+  box.innerHTML = questionCardHTML(data);
+  renderMath(box);
+}
+
+async function resolveNewTag(selectId, inputPrefix){
+  const sel=document.getElementById(selectId);
+  return sel.value==='__new__' ? (prompt('Enter new '+inputPrefix+':')||'').trim() : sel.value;
+}
+
 async function saveEdit(){
   if(!editQ) return;
   const st=document.getElementById('editStatus'); st.textContent='Saving…';
+
+  const subject = await resolveNewTag('eSubject','subject') || editQ.subject;
+  const topic = await resolveNewTag('eTopic','topic');
+  const subtopic = await resolveNewTag('eSubtopic','subtopic');
+
   const upd={
+    subject, topic: topic||null, subtopic: subtopic||null,
+    question_type: document.getElementById('eType').value,
+    difficulty: document.getElementById('eDiff').value||null,
+    marks: document.getElementById('eMarks').value?Number(document.getElementById('eMarks').value):null,
     question_text: document.getElementById('eText').value.trim()||null,
-    image_width: Number(document.getElementById('eWidth').value)||100
+    text_size: Number(document.getElementById('eTextSize').value)||100,
+    answer: document.getElementById('eAnswer').value.trim()||null,
+    image_width: Number(document.getElementById('eWidth').value)||100,
+    options: (document.getElementById('optionsBlock').style.display!=='none') ? editOptions : [],
+    match_data: (document.getElementById('matchBlock').style.display!=='none') ? editMatch : null
   };
   if(editBlob){
     const fileName=`q_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
@@ -778,8 +1085,51 @@ async function saveEdit(){
   }
   const {error:ue}=await sb.from('questions').update(upd).eq('id',editQ.id);
   if(ue){ st.textContent=''; toast('Save failed: '+ue.message); return; }
-  st.textContent=''; toast('Question updated!');
-  closeEdit(); await loadQuestions();
+  st.textContent=''; toast('Question saved!');
+  Object.assign(editQ, upd);
+  await loadQuestions();
+  renderCart(); renderBrowse();
+}
+
+/* ---------- SAVE ALL (cart) ---------- */
+async function saveAllCart(){
+  if(!editQ){ toast('Open a question to edit, then Save all edits will store it.'); return; }
+  await saveEdit();
+  document.getElementById('saveAllStatus').textContent='All changes saved.';
+  setTimeout(()=>document.getElementById('saveAllStatus').textContent='',2000);
+}
+
+/* ---------- AI: GENERATE 4 OPTIONS ---------- */
+async function aiOptions(){
+  const txt=document.getElementById('eText').value.trim();
+  if(!txt){toast('Question text is empty.');return;}
+  if(!confirm('Generate 4 options with AI? Uses ~₹0.5–2 of API credits.'))return;
+  const st=document.getElementById('editStatus'); st.textContent='AI generating options…';
+  try{
+    const resp=await fetch(SUPABASE_URL+'/functions/v1/extract-questions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY},
+      body:JSON.stringify({mode:'options', question:txt})
+    });
+    const data=await resp.json();
+    if(data.error){st.textContent='';toast('AI error: '+data.error);return;}
+    // parse "(a) text (b) text..." into option rows if present, else keep as raw text block
+    const raw = data.question_text || txt;
+    const optMatches=[...raw.matchAll(/\(([a-dA-D])\)\s*([^\(]+)/g)];
+    if(optMatches.length>=2){
+      const qOnly = raw.slice(0, raw.indexOf(optMatches[0][0]==='a'?'(a)':'('+optMatches[0][1]+')'));
+      document.getElementById('eText').value = qOnly.trim();
+      editOptions = optMatches.map(m=>({label:m[1].toLowerCase(), text:m[2].trim()}));
+      document.getElementById('eType').value='MCQ';
+      document.getElementById('optionsBlock').style.display='block';
+      renderOptions();
+    } else {
+      document.getElementById('eText').value = raw;
+    }
+    document.getElementById('eAnswer').value = data.answer || '';
+    st.textContent='Options added — review, then Save.';
+    livePreview();
+  }catch(e){st.textContent='';toast('Failed: '+e.message);}
 }
 
 /* ---------- INIT ---------- */
