@@ -213,6 +213,7 @@
     <div class="row" style="margin-bottom:10px">
       <h2 style="margin:0">2 · Selected questions <span class="count" id="cartCount">(0)</span></h2>
       <button style="margin-left:auto" onclick="saveAllCart()">💾 Save all edits</button>
+      <button class="ghost" onclick="exportForCBT()">⬇ Export for CBT app</button>
     </div>
     <div id="cartList"><p class="count">Nothing selected yet.</p></div>
     <div class="row" style="margin-top:10px">
@@ -802,6 +803,48 @@ function moveCart(i,dir){
   const j=i+dir; if(j<0||j>=CART.length)return;
   [CART[i],CART[j]]=[CART[j],CART[i]];
   renderCart();
+}
+
+/* ---------- EXPORT FOR CBT APP ---------- */
+// Maps our schema to the exact field names the CBT app's question-transfer.html expects.
+function exportForCBT(){
+  const picks=CART.map(id=>QUESTIONS.find(q=>q.id===id)).filter(Boolean);
+  if(!picks.length){toast('Select questions first.');return;}
+  const paperId=(document.getElementById('paperTitle').value||'PAPER_01').trim().replace(/\s+/g,'_').toUpperCase();
+  const opts=q=>Array.isArray(q.options)?q.options:[];
+  const optText=(q,i)=>{const o=opts(q).find(x=>x.label===['a','b','c','d'][i]);return o?o.text:'';};
+  const correctIdx=q=>{
+    if(!q.answer) return 0;
+    const m=q.answer.match(/\(([a-dA-D])\)/);
+    return m?['a','b','c','d'].indexOf(m[1].toLowerCase()):0;
+  };
+  const matchToText=q=>{
+    if(q.question_type!=='Match the Column'||!q.match_data) return '';
+    const m=q.match_data;
+    return (m.rows||[]).map((r,i)=>`${String.fromCharCode(65+i)}. ${r.left||''} — ${i+1}. ${r.right||''}`).join('\n');
+  };
+  const out=picks.map((q,i)=>({
+    number: i+1,
+    subject: q.subject,
+    question_text: q.question_text + (matchToText(q)?('\n'+matchToText(q)):''),
+    equation: '',
+    option_a: optText(q,0), option_b: optText(q,1), option_c: optText(q,2), option_d: optText(q,3),
+    correct: correctIdx(q),
+    solution_text: q.answer||'',
+    diagram_data: q.image_url||'',
+    extra_images: '',
+    passage: '',
+    match_data: q.question_type==='Match the Column' && q.match_data ? JSON.stringify(q.match_data) : '',
+    paper_id: paperId,
+    chapter: q.subtopic||q.topic||'',
+    difficulty: (q.difficulty||'medium').toLowerCase()
+  }));
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=paperId+'_cbt_export.json';a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported '+out.length+' questions for CBT import.');
 }
 
 /* ---------- GENERATE PAPER (from cart) ---------- */
