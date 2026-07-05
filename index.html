@@ -8,7 +8,15 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <style>
+  @font-face{
+    font-family:'KrutiDev010';
+    src:url('KrutiDev010.ttf') format('truetype');
+    font-display:swap;
+  }
+  .krutidev{font-family:'KrutiDev010',sans-serif;font-size:17px}
   :root{
     --ink:#1a2236; --ink-soft:#5b6479; --line:#e2e5ec; --bg:#f6f7f9; --paper:#ffffff;
     --accent:#2d6a4f; --accent-soft:#e8f1ec; --warn:#b4451f; --warn-soft:#fbeae5; --chip:#eef0f4;
@@ -89,8 +97,8 @@
     <h2>🤖 AI Extract (from photo of question paper/book)</h2>
     <p class="count" style="margin:0 0 10px">Take a photo of a page → AI reads all questions → you review → save. Uses your API credits (~₹1–3/page). Photos are NOT stored — only clean text.</p>
     <div class="row">
-      <label for="aiPick" style="cursor:pointer;background:var(--accent);color:#fff;padding:10px 18px;border-radius:9px;font-weight:600;font-size:14px">📄 Photo → AI Extract</label>
-      <input type="file" id="aiPick" accept="image/*" style="display:none">
+      <label for="aiPick" style="cursor:pointer;background:var(--accent);color:#fff;padding:10px 18px;border-radius:9px;font-weight:600;font-size:14px">📄 Photo / PDF / Word → AI Extract</label>
+      <input type="file" id="aiPick" accept="image/*,application/pdf,.docx" style="display:none">
       <span class="count" id="aiStatus"></span>
     </div>
     <div id="aiResults" style="margin-top:14px"></div>
@@ -159,6 +167,13 @@
         <label>Source type</label>
         <select id="fSourceType"><option value="">—</option><option>Author</option><option>Book</option><option>PYQ</option></select>
       </div>
+      <div class="field">
+        <label>Medium</label>
+        <select id="fMedium"><option>English</option><option>Hindi</option></select>
+      </div>
+      <div class="field">
+        <label style="display:flex;gap:6px;align-items:center;margin-top:22px"><input type="checkbox" id="fKruti" style="width:auto"> Krutidev font text</label>
+      </div>
       <div class="field" style="flex:1;min-width:200px">
         <label>Source detail</label>
         <input type="text" id="fSourceDetail" placeholder="e.g. NCERT Ch.4 / JEE 2023 / H.C. Verma" style="width:100%">
@@ -182,6 +197,7 @@
       <div class="field"><label>Total marks (optional)</label><input type="text" id="paperMarks" placeholder="e.g. 100" style="width:130px"></div>
       <div class="field"><label>Difficulty</label><select id="diffFilter"><option value="">Any</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
       <div class="field"><label>Question type</label><select id="typeFilter"><option value="">Any</option></select></div>
+      <div class="field"><label>Medium</label><select id="mediumFilter"><option value="">Any</option><option>English</option><option>Hindi</option></select></div>
     </div>
     <div id="subjectControls"></div>
     <div class="row" style="margin-top:8px">
@@ -205,7 +221,17 @@
   <div class="panel">
     <h2>Your question library <span class="count" id="libCount"></span></h2>
     <div class="row" style="margin-bottom:12px">
-      <input type="text" id="libSearch" placeholder="Search subject/topic/source…" style="min-width:240px" oninput="renderLibrary()">
+      <div class="field"><label>Subject</label><select id="flSubject" onchange="renderLibrary()"><option value="">All</option></select></div>
+      <div class="field"><label>Topic</label><select id="flTopic" onchange="renderLibrary()"><option value="">All</option></select></div>
+      <div class="field"><label>Subtopic</label><select id="flSubtopic" onchange="renderLibrary()"><option value="">All</option></select></div>
+      <div class="field"><label>Type</label><select id="flType" onchange="renderLibrary()"><option value="">All</option></select></div>
+      <div class="field"><label>Difficulty</label><select id="flDiff" onchange="renderLibrary()"><option value="">All</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
+      <div class="field"><label>Medium</label><select id="flMedium" onchange="renderLibrary()"><option value="">All</option><option>English</option><option>Hindi</option></select></div>
+      <div class="field"><label>Image</label><select id="flImg" onchange="renderLibrary()"><option value="">All</option><option value="yes">Has image</option><option value="no">No image</option></select></div>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <input type="text" id="libSearch" placeholder="Search text/source…" style="min-width:240px" oninput="renderLibrary()">
+      <button class="ghost mini" onclick="clearFilters()">Clear filters</button>
       <button class="ghost mini" onclick="loadQuestions()">Refresh</button>
     </div>
     <div style="overflow-x:auto">
@@ -213,6 +239,35 @@
         <thead><tr><th></th><th>Subject</th><th>Topic</th><th>Subtopic</th><th>Type</th><th>Diff.</th><th>Marks</th><th>Source</th><th>Used</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- QUESTION EDITOR -->
+  <div class="panel" id="editPanel" style="display:none;border-color:var(--accent)">
+    <h2>✏️ Edit question <span class="count" id="editId"></span></h2>
+    <div class="field" style="margin-bottom:12px">
+      <label>Question text</label>
+      <textarea id="eText" rows="4"></textarea>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Image — paste (Cmd+V), or use buttons</label>
+      <div class="pastezone" id="editPasteZone" tabindex="0"><span>Click here, then paste an image — or use buttons below</span></div>
+      <div class="row" style="margin-top:8px">
+        <label for="editPhotoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📷 Camera / Photos</label>
+        <input type="file" id="editPhotoPick" accept="image/*" style="display:none">
+        <label for="editFilePick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📁 Choose file</label>
+        <input type="file" id="editFilePick" accept="image/*" style="display:none">
+        <button class="danger mini" onclick="removeEditImage()">Remove image</button>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Image size on paper: <span id="eWidthVal">100</span>% width</label>
+      <input type="range" id="eWidth" min="20" max="100" step="5" value="100" oninput="document.getElementById('eWidthVal').textContent=this.value;previewEditWidth()">
+    </div>
+    <div class="row">
+      <button onclick="saveEdit()">Save changes</button>
+      <button class="ghost" onclick="closeEdit()">Cancel</button>
+      <span class="count" id="editStatus"></span>
     </div>
   </div>
 </div>
@@ -282,26 +337,68 @@ document.getElementById('photoPick').addEventListener('change', e=>{
 
 /* ---------- AI EXTRACTION ---------- */
 let extractedQs = [];
+
+async function callExtract(payload){
+  const resp = await fetch(SUPABASE_URL+'/functions/v1/extract-questions',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY},
+    body:JSON.stringify(payload)
+  });
+  const data = await resp.json();
+  if(data.error) throw new Error(data.error);
+  return Array.isArray(data)?data:[];
+}
+
+function fileToB64(f){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);
+    r.onerror=()=>rej(new Error('read failed'));
+    r.readAsDataURL(f);
+  });
+}
+
 document.getElementById('aiPick').addEventListener('change', async e=>{
   const f=e.target.files[0]; e.target.value='';
   if(!f) return;
   const st=document.getElementById('aiStatus');
-  st.textContent='Reading image with AI… (10–30 sec)';
   try{
-    const b64 = await new Promise((res,rej)=>{
-      const r=new FileReader();
-      r.onload=()=>res(r.result.split(',')[1]);
-      r.onerror=()=>rej(new Error('read failed'));
-      r.readAsDataURL(f);
-    });
-    const resp = await fetch(SUPABASE_URL+'/functions/v1/extract-questions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY},
-      body:JSON.stringify({imageBase64:b64, mediaType:f.type||'image/jpeg'})
-    });
-    const data = await resp.json();
-    if(data.error){ st.textContent=''; toast('AI error: '+data.error); return; }
-    extractedQs = Array.isArray(data)?data:[];
+    if(f.type.indexOf('image')===0){
+      st.textContent='Reading image with AI… (10–30 sec)';
+      extractedQs = await callExtract({imageBase64: await fileToB64(f), mediaType:f.type||'image/jpeg'});
+    }
+    else if(f.type==='application/pdf'){
+      st.textContent='Opening PDF…';
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({data: await f.arrayBuffer()}).promise;
+      const pages = Math.min(pdf.numPages, 20);
+      if(pdf.numPages>20) toast('PDF has '+pdf.numPages+' pages — processing first 20 only.');
+      if(!confirm('This PDF has '+pdf.numPages+' page(s). Each page costs ~₹1–3 in API credits ('+pages+' pages will be scanned). Continue?')){ st.textContent=''; return; }
+      extractedQs=[];
+      for(let p=1;p<=pages;p++){
+        st.textContent='AI reading page '+p+' of '+pages+'…';
+        const page = await pdf.getPage(p);
+        const vp = page.getViewport({scale:2});
+        const canvas=document.createElement('canvas');
+        canvas.width=vp.width; canvas.height=vp.height;
+        await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+        const b64 = canvas.toDataURL('image/jpeg',0.9).split(',')[1];
+        try{
+          const qs = await callExtract({imageBase64:b64, mediaType:'image/jpeg'});
+          extractedQs.push(...qs);
+        }catch(pe){ toast('Page '+p+' failed: '+pe.message); }
+      }
+    }
+    else if(f.name.toLowerCase().endsWith('.docx')){
+      st.textContent='Reading Word document…';
+      const result = await mammoth.extractRawText({arrayBuffer: await f.arrayBuffer()});
+      const docText = (result.value||'').trim();
+      if(!docText){ st.textContent=''; toast('No text found in that Word file.'); return; }
+      st.textContent='AI extracting questions from document text…';
+      extractedQs = await callExtract({text: docText.slice(0,50000)});
+    }
+    else { st.textContent=''; toast('Unsupported file — use image, PDF, or .docx'); return; }
+
     st.textContent = extractedQs.length+' question(s) found — review below, then save.';
     renderExtracted();
   }catch(err){
@@ -346,6 +443,8 @@ async function saveExtracted(){
     difficulty: document.getElementById('fDiff').value||null,
     marks: document.getElementById('fMarks').value?Number(document.getElementById('fMarks').value):null,
     source: [document.getElementById('fSourceType').value, document.getElementById('fSourceDetail').value.trim()].filter(Boolean).join(' · ')||null,
+    medium: document.getElementById('fMedium').value,
+    is_krutidev: false,
     image_url:null, use_count:0
   };
   const rows = extractedQs.map(q=>({...base, question_text:q.question_text, question_type:q.question_type||null}));
@@ -405,6 +504,8 @@ async function saveQuestion(){
     source: [document.getElementById('fSourceType').value, document.getElementById('fSourceDetail').value.trim()].filter(Boolean).join(' · ') || null,
     question_text: qText || null,
     image_url: imageUrl,
+    medium: document.getElementById('fMedium').value,
+    is_krutidev: document.getElementById('fKruti').checked,
     use_count: 0
   };
 
@@ -487,6 +588,7 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random
 async function generatePaper(){
   const diff=document.getElementById('diffFilter').value;
   const qtype=document.getElementById('typeFilter').value;
+  const medium=document.getElementById('mediumFilter').value;
   const picks=[];
   const used=new Set();
   const inputs=[...document.querySelectorAll('#subjectControls input[type=number]')];
@@ -499,6 +601,7 @@ async function generatePaper(){
       (subtop===''||q.subtopic===subtop)&&
       (!diff||q.difficulty===diff)&&
       (!qtype||q.question_type===qtype)&&
+      (!medium||(q.medium||'English')===medium)&&
       !used.has(q));
     pool=shuffle(pool.slice()).slice(0,n);
     pool.forEach(q=>used.add(q));
@@ -521,7 +624,8 @@ async function generatePaper(){
       const tags=[tlabel,q.question_type,q.marks?q.marks+' marks':''].filter(Boolean).join(' · ');
       html+=`<div class="q"><span class="qnum">Q${n}.</span>
         ${tags?'<span class="qtopic">['+tags+']</span>':''}
-        ${q.question_text?'<div class="qtext">'+q.question_text.replace(/</g,'&lt;')+'</div>':(q.image_url?'<img src="'+q.image_url+'" alt="question image">':'')}</div>`;
+        ${q.question_text?'<div class="qtext'+(q.is_krutidev?' krutidev':'')+'">'+q.question_text.replace(/</g,'&lt;')+'</div>':''}
+        ${q.image_url?'<img src="'+q.image_url+'" style="width:'+(q.image_width||100)+'%" alt="question image">':''}</div>`;
       n++;
     });
   });
@@ -552,12 +656,39 @@ async function deleteQuestion(id, imageUrl){
   await loadQuestions();
 }
 
+function populateLibFilters(){
+  const fill=(id,field)=>{
+    const el=document.getElementById(id); if(!el) return;
+    const cur=el.value;
+    const vals=[...new Set(QUESTIONS.map(q=>q[field]).filter(Boolean))].sort();
+    el.innerHTML='<option value="">All</option>'+vals.map(v=>`<option>${v}</option>`).join('');
+    el.value=cur;
+  };
+  fill('flSubject','subject');fill('flTopic','topic');fill('flSubtopic','subtopic');fill('flType','question_type');
+}
+
+function clearFilters(){
+  ['flSubject','flTopic','flSubtopic','flType','flDiff','flImg','flMedium'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('libSearch').value='';
+  renderLibrary();
+}
+
 function renderLibrary(){
-  const search = (document.getElementById('libSearch')?.value||'').toLowerCase();
+  populateLibFilters();
+  const v=id=>document.getElementById(id)?.value||'';
+  const search=v('libSearch').toLowerCase();
   const tb=document.querySelector('#libTable tbody');tb.innerHTML='';
   const filtered = QUESTIONS.filter(q=>{
-    if(!search) return true;
-    return [q.subject,q.topic,q.subtopic,q.source,q.question_type].filter(Boolean).join(' ').toLowerCase().includes(search);
+    if(v('flSubject')&&q.subject!==v('flSubject'))return false;
+    if(v('flTopic')&&q.topic!==v('flTopic'))return false;
+    if(v('flSubtopic')&&q.subtopic!==v('flSubtopic'))return false;
+    if(v('flType')&&q.question_type!==v('flType'))return false;
+    if(v('flDiff')&&q.difficulty!==v('flDiff'))return false;
+    if(v('flMedium')&&(q.medium||'English')!==v('flMedium'))return false;
+    if(v('flImg')==='yes'&&!q.image_url)return false;
+    if(v('flImg')==='no'&&q.image_url)return false;
+    if(search && ![q.subject,q.topic,q.subtopic,q.source,q.question_type,q.question_text].filter(Boolean).join(' ').toLowerCase().includes(search))return false;
+    return true;
   });
   filtered.forEach(q=>{
     const tr=document.createElement('tr');
@@ -567,10 +698,88 @@ function renderLibrary(){
       <td>${q.difficulty||''}</td><td>${q.marks||''}</td>
       <td style="max-width:140px">${q.source||''}</td>
       <td>${q.use_count||0}</td>
-      <td><button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button></td>`;
+      <td style="white-space:nowrap"><button class="ghost mini" onclick="openEdit(${q.id})">Edit</button>
+      <button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button></td>`;
     tb.appendChild(tr);
   });
   document.getElementById('libCount').textContent='('+filtered.length+' of '+QUESTIONS.length+')';
+}
+
+/* ---------- QUESTION EDITOR ---------- */
+let editQ=null, editBlob=null, editRemoveImage=false;
+
+function openEdit(id){
+  editQ = QUESTIONS.find(q=>q.id===id); if(!editQ) return;
+  editBlob=null; editRemoveImage=false;
+  document.getElementById('editPanel').style.display='block';
+  document.getElementById('editId').textContent='#'+editQ.id;
+  document.getElementById('eText').value=editQ.question_text||'';
+  document.getElementById('eWidth').value=editQ.image_width||100;
+  document.getElementById('eWidthVal').textContent=editQ.image_width||100;
+  const z=document.getElementById('editPasteZone');
+  if(editQ.image_url){
+    z.classList.add('has-image');
+    z.innerHTML=`<img id="editImgPreview" src="${editQ.image_url}" style="width:${editQ.image_width||100}%">`;
+  } else {
+    z.classList.remove('has-image');
+    z.innerHTML='<span>Click here, then paste an image — or use buttons below</span>';
+  }
+  document.getElementById('editPanel').scrollIntoView({behavior:'smooth'});
+}
+
+function setEditImage(blob){
+  editBlob=blob; editRemoveImage=false;
+  const z=document.getElementById('editPasteZone');
+  z.classList.add('has-image');
+  z.innerHTML=`<img id="editImgPreview" src="${URL.createObjectURL(blob)}" style="width:${document.getElementById('eWidth').value}%">`;
+}
+function removeEditImage(){
+  editBlob=null; editRemoveImage=true;
+  const z=document.getElementById('editPasteZone');
+  z.classList.remove('has-image');
+  z.innerHTML='<span>Image will be removed on save</span>';
+}
+function previewEditWidth(){
+  const img=document.getElementById('editImgPreview');
+  if(img) img.style.width=document.getElementById('eWidth').value+'%';
+}
+function closeEdit(){document.getElementById('editPanel').style.display='none';editQ=null;}
+
+const editZone=document.getElementById('editPasteZone');
+editZone.addEventListener('click',()=>editZone.focus());
+editZone.addEventListener('paste',e=>{
+  for(const item of e.clipboardData.items){
+    if(item.type.indexOf('image')===0){ setEditImage(item.getAsFile()); e.preventDefault(); return; }
+  }
+  toast('No image in clipboard.');
+});
+document.getElementById('editPhotoPick').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(f&&f.type.indexOf('image')===0) setEditImage(f); e.target.value='';
+});
+document.getElementById('editFilePick').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(f&&f.type.indexOf('image')===0) setEditImage(f); e.target.value='';
+});
+
+async function saveEdit(){
+  if(!editQ) return;
+  const st=document.getElementById('editStatus'); st.textContent='Saving…';
+  const upd={
+    question_text: document.getElementById('eText').value.trim()||null,
+    image_width: Number(document.getElementById('eWidth').value)||100
+  };
+  if(editBlob){
+    const fileName=`q_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+    const {error}=await sb.storage.from('question-images').upload(fileName,editBlob,{contentType:editBlob.type||'image/png'});
+    if(error){ st.textContent=''; toast('Image upload failed: '+error.message); return; }
+    const {data:pub}=sb.storage.from('question-images').getPublicUrl(fileName);
+    upd.image_url=pub.publicUrl;
+  } else if(editRemoveImage){
+    upd.image_url=null;
+  }
+  const {error:ue}=await sb.from('questions').update(upd).eq('id',editQ.id);
+  if(ue){ st.textContent=''; toast('Save failed: '+ue.message); return; }
+  st.textContent=''; toast('Question updated!');
+  closeEdit(); await loadQuestions();
 }
 
 /* ---------- INIT ---------- */
