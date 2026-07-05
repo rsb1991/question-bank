@@ -29,7 +29,7 @@
   nav.tabs{display:flex;gap:6px;margin-left:auto}
   nav.tabs button{background:none;border:none;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;color:var(--ink-soft);cursor:pointer}
   nav.tabs button.active{background:var(--accent-soft);color:var(--accent)}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px}
+  .wrap{max-width:100%;margin:0;padding:24px 32px}
   .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px}
   .panel h2{font-size:15px;margin:0 0 14px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft)}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
@@ -51,9 +51,7 @@
   .chip{display:inline-block;background:var(--chip);padding:2px 8px;border-radius:14px;font-size:12px}
   .count{font-size:13px;color:var(--ink-soft)}
   .subj-block{margin-bottom:12px}
-  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-  .two-col > .panel{margin-bottom:0}
-  @media (max-width:700px){.two-col{grid-template-columns:1fr!important}}
+  .two-col{display:flex;flex-direction:column;gap:14px}
   .thumb{width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
   /* PASTE ZONE */
   .pastezone{
@@ -221,8 +219,8 @@
       <span class="count" id="browseCount" style="margin-top:20px"></span>
     </div>
     <div class="row" style="margin-bottom:12px">
-      <div class="field"><label>Preview column width: <span id="colWidthVal">50</span>%</label>
-        <input type="range" id="colWidthSlider" min="30" max="70" step="5" value="50" oninput="document.getElementById('colWidthVal').textContent=this.value;applyColWidth()" style="width:180px">
+      <div class="field"><label>Student preview width: <span id="colWidthVal">50</span>%</label>
+        <input type="range" id="colWidthSlider" min="20" max="70" step="5" value="50" oninput="document.getElementById('colWidthVal').textContent=this.value;applyColWidth()" style="width:180px">
       </div>
     </div>
     <div id="browseList" class="two-col"></div>
@@ -915,9 +913,9 @@ function browsePool(){
 }
 
 function applyColWidth(){
-  const w=document.getElementById('colWidthSlider').value;
-  const el=document.getElementById('browseList');
-  if(window.innerWidth>700) el.style.gridTemplateColumns=w+'% '+(100-w)+'%';
+  const w=Number(document.getElementById('colWidthSlider').value);
+  document.querySelectorAll('.inline-qcol').forEach(el=>{el.style.flex=`0 0 ${100-w}%`;el.style.maxWidth=`${100-w}%`;});
+  document.querySelectorAll('.inline-pcol').forEach(el=>{el.style.flex=`0 0 ${w}%`;el.style.maxWidth=`${w}%`;});
 }
 
 function qPreviewHTML(q){
@@ -985,8 +983,8 @@ function inlineCardHTML(q, num, inCart){
       <option ${(!q.question_type||q.question_type==='Other')?'selected':''}>Other</option>
     </select>
   </div>
-  <div class="row" style="gap:16px;align-items:flex-start" class="mob-grid1">
-    <div style="flex:1;min-width:280px">
+  <div class="row" style="gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div class="inline-qcol" style="flex:1;min-width:280px">
       <div class="field" style="margin-bottom:8px">
         <label>Question text</label>
         <textarea id="iText-${q.id}" rows="4" oninput="livePreviewInline(${q.id})">${(q.question_text||'').replace(/</g,'&lt;')}</textarea>
@@ -1024,7 +1022,7 @@ function inlineCardHTML(q, num, inCart){
       </div>
       <div class="count" style="margin-top:4px">${[q.topic,q.subtopic,q.difficulty,'used '+(q.use_count||0)+'×'].filter(Boolean).join(' · ')}</div>
     </div>
-    <div style="flex:1;min-width:280px">
+    <div class="inline-pcol" style="flex:1;min-width:280px">
       <label class="count" style="display:block;margin-bottom:6px">Student preview</label>
       <div id="iPreview-${q.id}" style="border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff"></div>
       <div id="iStatus-${q.id}" class="count" style="margin-top:6px"></div>
