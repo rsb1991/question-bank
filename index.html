@@ -951,19 +951,244 @@ function renderBrowse(){
   pool.forEach((q,i)=>{
     const inCart=CART.includes(q.id);
     const d=document.createElement('div');
-    d.className='panel'; d.style.cssText='background:#fbfdfc;padding:12px;margin-bottom:10px';
-    d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
-        <strong style="font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px">Question ${i+1}</strong>
-        <button class="ghost mini" onclick="openEdit(${q.id})">✏️ Edit</button>
-      </div>
-      <div class="row" style="align-items:flex-start">
-      <input type="checkbox" style="width:auto;margin-top:4px" ${inCart?'checked':''} onchange="toggleCart(${q.id},this.checked)">
-      <div style="flex:1">${qPreviewHTML(q)}</div></div>`;
+    d.className='panel'; d.style.cssText='background:#fbfdfc;padding:14px';
+    d.id='card-'+q.id;
+    d.innerHTML = inlineCardHTML(q, i+1, inCart);
     box.appendChild(d);
+    renderInlineOptions(q.id);
+    renderInlineMatch(q.id);
+    livePreviewInline(q.id);
   });
-  renderMath(box);
   applyColWidth();
 }
+
+/* ---------- INLINE PER-QUESTION EDITOR ---------- */
+function inlineCardHTML(q, num, inCart){
+  const opts=Array.isArray(q.options)?JSON.parse(JSON.stringify(q.options)):[];
+  const showOpts=(q.question_type==='MCQ'||q.question_type==='True or False'||q.question_type==='Assertion Reason'||q.question_type==='Statement Type');
+  const showMatch=q.question_type==='Match the Column';
+  return `
+  <div class="row" style="justify-content:space-between;margin-bottom:10px">
+    <strong style="color:var(--accent);font-size:15px">Q${num} · ${q.subject}</strong>
+    <div class="row">
+      <button onclick="saveInline(${q.id})">Save</button>
+      <button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button>
+    </div>
+  </div>
+  <div class="row" style="margin-bottom:8px;align-items:center">
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" style="width:auto" ${inCart?'checked':''} onchange="toggleCart(${q.id},this.checked)"> Add to paper</label>
+    <select id="iType-${q.id}" onchange="onInlineTypeChange(${q.id})" style="margin-left:auto">
+      <option ${q.question_type==='MCQ'?'selected':''}>MCQ</option><option ${q.question_type==='Numerical'?'selected':''}>Numerical</option>
+      <option ${q.question_type==='Graphical'?'selected':''}>Graphical</option><option ${q.question_type==='Assertion Reason'?'selected':''}>Assertion Reason</option>
+      <option ${q.question_type==='Match the Column'?'selected':''}>Match the Column</option><option ${q.question_type==='Statement Type'?'selected':''}>Statement Type</option>
+      <option ${q.question_type==='Numerical Value'?'selected':''}>Numerical Value</option><option ${q.question_type==='True or False'?'selected':''}>True or False</option>
+      <option ${(!q.question_type||q.question_type==='Other')?'selected':''}>Other</option>
+    </select>
+  </div>
+  <div class="row" style="gap:16px;align-items:flex-start" class="mob-grid1">
+    <div style="flex:1;min-width:280px">
+      <div class="field" style="margin-bottom:8px">
+        <label>Question text</label>
+        <textarea id="iText-${q.id}" rows="4" oninput="livePreviewInline(${q.id})">${(q.question_text||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <label>Image</label>
+        <div class="pastezone" id="iPaste-${q.id}" tabindex="0" style="min-height:50px;padding:10px">
+          ${q.image_url?`<img id="iImg-${q.id}" src="${q.image_url}" style="width:${q.image_width||100}%">`:'<span style="font-size:13px">Click, then paste (Cmd+V) — or use buttons</span>'}
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label for="iPhoto-${q.id}" class="ghost mini" style="cursor:pointer;padding:6px 10px;border-radius:8px">📷 Camera/Photos</label>
+          <input type="file" id="iPhoto-${q.id}" accept="image/*" style="display:none">
+          <button class="danger mini" onclick="removeInlineImage(${q.id})">Remove</button>
+          <span style="font-size:12px;color:var(--ink-soft)">Size: <span id="iWidthVal-${q.id}">${q.image_width||100}</span>%</span>
+          <input type="range" id="iWidth-${q.id}" min="20" max="100" step="5" value="${q.image_width||100}" oninput="document.getElementById('iWidthVal-${q.id}').textContent=this.value;previewInlineWidth(${q.id});livePreviewInline(${q.id})" style="width:100px">
+        </div>
+      </div>
+      <div id="iOptionsBlock-${q.id}" class="field" style="margin-bottom:8px;display:${showOpts?'block':'none'}">
+        <label>Options</label>
+        <div id="iOptionsList-${q.id}"></div>
+        <button class="ghost mini" onclick="addInlineOption(${q.id})">＋ Add option</button>
+      </div>
+      <div id="iMatchBlock-${q.id}" class="field" style="margin-bottom:8px;display:${showMatch?'block':'none'}">
+        <label>Match the Column</label>
+        <div class="row" style="margin-bottom:6px">
+          <input type="text" id="iMatchColA-${q.id}" placeholder="Column A title" oninput="onMatchFieldChange(${q.id})">
+          <input type="text" id="iMatchColB-${q.id}" placeholder="Column B title" oninput="onMatchFieldChange(${q.id})">
+        </div>
+        <div id="iMatchRows-${q.id}"></div>
+        <button class="ghost mini" onclick="addInlineMatchRow(${q.id})">＋ Add row</button>
+      </div>
+      <div class="field" style="margin-bottom:4px">
+        <label>Correct answer</label>
+        <input type="text" id="iAnswer-${q.id}" value="${(q.answer||'').replace(/"/g,'&quot;')}" placeholder="e.g. (b)" oninput="livePreviewInline(${q.id})">
+      </div>
+      <div class="count" style="margin-top:4px">${[q.topic,q.subtopic,q.difficulty,'used '+(q.use_count||0)+'×'].filter(Boolean).join(' · ')}</div>
+    </div>
+    <div style="flex:1;min-width:280px">
+      <label class="count" style="display:block;margin-bottom:6px">Student preview</label>
+      <div id="iPreview-${q.id}" style="border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff"></div>
+      <div id="iStatus-${q.id}" class="count" style="margin-top:6px"></div>
+    </div>
+  </div>`;
+}
+
+const INLINE_STATE = {}; // qid -> {options:[], match:{...}, blob:null, removeImage:false}
+
+function inlineState(qid){
+  if(!INLINE_STATE[qid]){
+    const q=QUESTIONS.find(x=>x.id===qid);
+    INLINE_STATE[qid]={
+      options: q && Array.isArray(q.options) ? JSON.parse(JSON.stringify(q.options)) : [],
+      match: q && q.match_data ? JSON.parse(JSON.stringify(q.match_data)) : null,
+      blob:null, removeImage:false
+    };
+  }
+  return INLINE_STATE[qid];
+}
+
+function onInlineTypeChange(qid){
+  const t=document.getElementById('iType-'+qid).value;
+  const st=inlineState(qid);
+  document.getElementById('iOptionsBlock-'+qid).style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type')?'block':'none';
+  document.getElementById('iMatchBlock-'+qid).style.display=(t==='Match the Column')?'block':'none';
+  if(t==='MCQ' && st.options.length===0) st.options=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
+  if(t==='True or False' && st.options.length===0) st.options=[{label:'a',text:'True'},{label:'b',text:'False'}];
+  if(t==='Match the Column' && !st.match) st.match={colA:'Column I',colB:'Column II',rows:[{left:'',right:''},{left:'',right:''}]};
+  renderInlineOptions(qid); renderInlineMatch(qid); livePreviewInline(qid);
+}
+
+function renderInlineOptions(qid){
+  const st=inlineState(qid);
+  const box=document.getElementById('iOptionsList-'+qid); if(!box) return;
+  box.innerHTML='';
+  st.options.forEach((o,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.style.marginBottom='5px';
+    row.innerHTML=`<span class="chip">(${o.label})</span>
+      <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="inlineState(${qid}).options[${i}].text=this.value;livePreviewInline(${qid})">
+      <button class="danger mini" onclick="inlineState(${qid}).options.splice(${i},1);renderInlineOptions(${qid});livePreviewInline(${qid})">✕</button>`;
+    box.appendChild(row);
+  });
+  renderMath(box);
+}
+function addInlineOption(qid){
+  const st=inlineState(qid);
+  st.options.push({label:String.fromCharCode(97+st.options.length),text:''});
+  renderInlineOptions(qid); livePreviewInline(qid);
+}
+
+function renderInlineMatch(qid){
+  const st=inlineState(qid); if(!st.match) return;
+  const colA=document.getElementById('iMatchColA-'+qid), colB=document.getElementById('iMatchColB-'+qid);
+  if(colA) colA.value=st.match.colA; if(colB) colB.value=st.match.colB;
+  const box=document.getElementById('iMatchRows-'+qid); if(!box) return;
+  box.innerHTML='';
+  st.match.rows.forEach((r,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.style.marginBottom='5px';
+    row.innerHTML=`<span class="chip">${i+1}</span>
+      <input type="text" placeholder="Left" value="${(r.left||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="inlineState(${qid}).match.rows[${i}].left=this.value;livePreviewInline(${qid})">
+      <input type="text" placeholder="Right" value="${(r.right||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="inlineState(${qid}).match.rows[${i}].right=this.value;livePreviewInline(${qid})">
+      <button class="danger mini" onclick="inlineState(${qid}).match.rows.splice(${i},1);renderInlineMatch(${qid});livePreviewInline(${qid})">✕</button>`;
+    box.appendChild(row);
+  });
+}
+function addInlineMatchRow(qid){ inlineState(qid).match.rows.push({left:'',right:''}); renderInlineMatch(qid); livePreviewInline(qid); }
+function onMatchFieldChange(qid){
+  const st=inlineState(qid);
+  st.match.colA=document.getElementById('iMatchColA-'+qid).value;
+  st.match.colB=document.getElementById('iMatchColB-'+qid).value;
+  livePreviewInline(qid);
+}
+
+function setInlineImage(qid, blob){
+  const st=inlineState(qid); st.blob=blob; st.removeImage=false;
+  const z=document.getElementById('iPaste-'+qid);
+  z.innerHTML=`<img id="iImg-${qid}" src="${URL.createObjectURL(blob)}" style="width:${document.getElementById('iWidth-'+qid).value}%">`;
+  livePreviewInline(qid);
+}
+function removeInlineImage(qid){
+  const st=inlineState(qid); st.blob=null; st.removeImage=true;
+  document.getElementById('iPaste-'+qid).innerHTML='<span style="font-size:13px">Image will be removed on save</span>';
+  livePreviewInline(qid);
+}
+function previewInlineWidth(qid){
+  const img=document.getElementById('iImg-'+qid);
+  if(img) img.style.width=document.getElementById('iWidth-'+qid).value+'%';
+}
+
+function livePreviewInline(qid){
+  const q=QUESTIONS.find(x=>x.id===qid); if(!q) return;
+  const st=inlineState(qid);
+  const textEl=document.getElementById('iText-'+qid);
+  const widthEl=document.getElementById('iWidth-'+qid);
+  const typeEl=document.getElementById('iType-'+qid);
+  const data={
+    question_text: textEl?textEl.value:q.question_text,
+    image_url: st.removeImage?null:(st.blob?document.getElementById('iImg-'+qid)?.src:q.image_url),
+    image_width: widthEl?Number(widthEl.value):100,
+    question_type: typeEl?typeEl.value:q.question_type,
+    options: st.options, match_data: st.match,
+    is_krutidev: q.is_krutidev
+  };
+  const box=document.getElementById('iPreview-'+qid);
+  if(box){ box.innerHTML=questionCardHTML(data); renderMath(box); }
+}
+
+async function saveInline(qid){
+  const q=QUESTIONS.find(x=>x.id===qid); if(!q) return;
+  const st=inlineState(qid);
+  const statusEl=document.getElementById('iStatus-'+qid);
+  statusEl.textContent='Saving…';
+  const upd={
+    question_type: document.getElementById('iType-'+qid).value,
+    question_text: document.getElementById('iText-'+qid).value.trim()||null,
+    answer: document.getElementById('iAnswer-'+qid).value.trim()||null,
+    image_width: Number(document.getElementById('iWidth-'+qid).value)||100,
+    options: (document.getElementById('iOptionsBlock-'+qid).style.display!=='none') ? st.options : [],
+    match_data: (document.getElementById('iMatchBlock-'+qid).style.display!=='none') ? st.match : null
+  };
+  if(st.blob){
+    const fileName=`q_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+    const {error}=await sb.storage.from('question-images').upload(fileName,st.blob,{contentType:st.blob.type||'image/png'});
+    if(error){ statusEl.textContent=''; toast('Image upload failed: '+error.message); return; }
+    const {data:pub}=sb.storage.from('question-images').getPublicUrl(fileName);
+    upd.image_url=pub.publicUrl;
+  } else if(st.removeImage){
+    upd.image_url=null;
+  }
+  const {error:ue}=await sb.from('questions').update(upd).eq('id',qid);
+  if(ue){ statusEl.textContent=''; toast('Save failed: '+ue.message); return; }
+  Object.assign(q, upd);
+  delete INLINE_STATE[qid];
+  statusEl.textContent='Saved ✓';
+  toast('Question saved!');
+  setTimeout(()=>{ if(statusEl) statusEl.textContent=''; },2000);
+  await loadQuestions();
+  renderCart();
+}
+
+// Paste-image listeners are delegated once, since cards are rebuilt on every renderBrowse
+document.addEventListener('click', e=>{
+  const zone=e.target.closest('.pastezone');
+  if(zone && zone.id.startsWith('iPaste-')) zone.focus();
+});
+document.addEventListener('paste', e=>{
+  const active=document.activeElement;
+  if(!active || !active.id || !active.id.startsWith('iPaste-')) return;
+  const qid=Number(active.id.replace('iPaste-',''));
+  for(const item of e.clipboardData.items){
+    if(item.type.indexOf('image')===0){ setInlineImage(qid, item.getAsFile()); e.preventDefault(); return; }
+  }
+  toast('No image in clipboard.');
+});
+document.addEventListener('change', e=>{
+  if(e.target.id && e.target.id.startsWith('iPhoto-')){
+    const qid=Number(e.target.id.replace('iPhoto-',''));
+    const f=e.target.files[0];
+    if(f && f.type.indexOf('image')===0) setInlineImage(qid, f);
+    e.target.value='';
+  }
+});
+document.querySelectorAll('.pastezone[tabindex]').forEach(z=>z.setAttribute('tabindex','0'));
 
 function toggleCart(id,on){
   if(on){ if(!CART.includes(id)) CART.push(id); }
