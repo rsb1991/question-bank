@@ -107,6 +107,17 @@
     <div id="aiResults" style="margin-top:14px"></div>
   </div>
 
+  <div class="panel" style="border-color:var(--accent)">
+    <h2>📥 Import from CBT CSV</h2>
+    <p class="count" style="margin:0 0 10px">Upload a CSV exported from your CBT app (or this app's own export) — questions, options, and answers are recognised automatically.</p>
+    <div class="row">
+      <label for="csvImportPick" style="cursor:pointer;background:var(--accent);color:#fff;padding:10px 18px;border-radius:9px;font-weight:600;font-size:14px">📄 Choose CSV file</label>
+      <input type="file" id="csvImportPick" accept=".csv" style="display:none">
+      <span class="count" id="csvImportStatus"></span>
+    </div>
+    <div id="csvImportPreview" style="margin-top:14px"></div>
+  </div>
+
   <div class="help"><strong>Add a question:</strong> paste an image directly (Cmd+V after copying a screenshot) or type the question text. Fill in the tags, then Save.</div>
   <div class="panel">
     <h2>Question content</h2>
@@ -545,6 +556,137 @@ function renderExtracted(){
     box.appendChild(bar);
   }
   renderMath(box);
+}
+
+/* ---------- CSV IMPORT (from CBT export or this app's own export) ---------- */
+function parseCSVFile(text){
+  // Simple RFC4180-ish parser handling quoted fields with commas/newlines
+  const rows=[]; let row=[], cell='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"' && text[i+1]==='"'){ cell+='"'; i++; }
+      else if(c==='"'){ inQ=false; }
+      else cell+=c;
+    } else {
+      if(c==='"') inQ=true;
+      else if(c===','){ row.push(cell); cell=''; }
+      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else if(c==='\r'){}
+      else cell+=c;
+    }
+  }
+  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(c=>c.trim()!==''));
+}
+
+document.getElementById('csvImportPick').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  const st=document.getElementById('csvImportStatus');
+  st.textContent='Reading CSV…';
+  try{
+    const text = await f.text();
+    const rows = parseCSVFile(text);
+    if(rows.length<2){ st.textContent=''; toast('CSV appears empty.'); return; }
+    const header = rows[0].map(h=>h.trim().toLowerCase());
+    const idx=name=>header.indexOf(name);
+    // Recognises both this app's own export AND typical CBT column names
+    const col = {
+      subject: idx('subject'),
+      question_text: idx('question_text')>=0?idx('question_text'):idx('question'),
+      equation: idx('equation'),
+      option_a: idx('option_a'), option_b: idx('option_b'), option_c: idx('option_c'), option_d: idx('option_d'),
+      correct: idx('correct'),
+      solution_text: idx('solution_text')>=0?idx('solution_text'):idx('solution'),
+      diagram_data: idx('diagram_data')>=0?idx('diagram_data'):idx('image'),
+      passage: idx('passage'),
+      match_data: idx('match_data'),
+      paper_id: idx('paper_id'),
+      chapter: idx('chapter')>=0?idx('chapter'):(idx('topic')>=0?idx('topic'):-1),
+      difficulty: idx('difficulty')
+    };
+    if(col.subject<0 || col.question_text<0){
+      st.textContent=''; toast('CSV needs at least "subject" and "question_text" columns.'); return;
+    }
+    const g=(r,i)=> i>=0 ? (r[i]||'').trim() : '';
+    importedCsvRows = rows.slice(1).map(r=>{
+      const optPairs=[['a',g(r,col.option_a)],['b',g(r,col.option_b)],['c',g(r,col.option_c)],['d',g(r,col.option_d)]]
+        .filter(([,t])=>t);
+      const options=optPairs.map(([label,text])=>({label,text}));
+      const correctRaw=g(r,col.correct);
+      let answer=null;
+      if(correctRaw!==''){
+        const ci=Number(correctRaw);
+        if(!isNaN(ci) && optPairs[ci]) answer=`(${optPairs[ci][0]}) ${optPairs[ci][1]}`;
+      }
+      let qtext=g(r,col.question_text);
+      const eq=g(r,col.equation); if(eq) qtext=(qtext?qtext+'\n':'')+eq;
+      const passage=g(r,col.passage);
+      if(passage) qtext=passage+'\n\n'+qtext;
+      let matchData=null;
+      const md=g(r,col.match_data);
+      if(md){ try{ matchData=JSON.parse(md); }catch(_){ } }
+      return {
+        subject: g(r,col.subject)||'General',
+        topic: g(r,col.chapter)||null,
+        subtopic: null,
+        question_text: qtext,
+        question_type: matchData?'Match the Column':(options.length?'MCQ':'Other'),
+        difficulty: g(r,col.difficulty)?g(r,col.difficulty)[0].toUpperCase()+g(r,col.difficulty).slice(1).toLowerCase():null,
+        options, answer, match_data: matchData,
+        image_url: g(r,col.diagram_data)&&g(r,col.diagram_data).startsWith('http')?g(r,col.diagram_data):null,
+        source: g(r,col.paper_id)?('CBT import · '+g(r,col.paper_id)):'CBT import',
+        solution_note: g(r,col.solution_text)
+      };
+    });
+    st.textContent = importedCsvRows.length+' question(s) parsed — review below, then Import.';
+    renderCsvImportPreview();
+  }catch(err){
+    st.textContent=''; toast('Import failed: '+err.message);
+  }
+});
+
+let importedCsvRows=[];
+function renderCsvImportPreview(){
+  const box=document.getElementById('csvImportPreview'); box.innerHTML='';
+  importedCsvRows.forEach((q,i)=>{
+    const d=document.createElement('div');
+    d.className='panel'; d.style.background='#fbfdfc';
+    const optHtml=q.options.length?`<div style="margin-top:6px">`+q.options.map(o=>`<div style="font-size:13px">(${o.label}) ${(o.text||'').replace(/</g,'&lt;')}</div>`).join('')+`</div>`:'';
+    d.innerHTML=`<div class="row" style="margin-bottom:6px">
+        <strong>Row ${i+1}</strong><span class="chip">${q.subject}</span><span class="chip">${q.question_type}</span>
+        <button class="danger mini" style="margin-left:auto" onclick="importedCsvRows.splice(${i},1);renderCsvImportPreview()">Discard</button>
+      </div>
+      <div style="white-space:pre-wrap;font-size:14px">${(q.question_text||'').replace(/</g,'&lt;')}</div>
+      ${optHtml}
+      ${q.answer?'<div class="count" style="margin-top:6px">Answer: '+q.answer.replace(/</g,'&lt;')+'</div>':''}`;
+    box.appendChild(d);
+  });
+  if(importedCsvRows.length){
+    const bar=document.createElement('div'); bar.className='row'; bar.style.marginTop='10px';
+    bar.innerHTML=`<button onclick="saveCsvImport()">Import all ${importedCsvRows.length} into bank</button>`;
+    box.appendChild(bar);
+  }
+  renderMath(box);
+}
+
+async function saveCsvImport(){
+  if(!importedCsvRows.length) return;
+  const st=document.getElementById('csvImportStatus');
+  st.textContent='Importing…';
+  const rows=importedCsvRows.map(q=>({
+    subject:q.subject, topic:q.topic, subtopic:q.subtopic,
+    question_text:q.question_text, question_type:q.question_type,
+    difficulty:q.difficulty, options:q.options, answer:q.answer,
+    match_data:q.match_data, image_url:q.image_url, source:q.source,
+    medium:'English', is_krutidev:false, use_count:0
+  }));
+  const {error}=await sb.from('questions').insert(rows);
+  if(error){ st.textContent=''; toast('Import failed: '+error.message); return; }
+  toast(rows.length+' questions imported!');
+  st.textContent=''; importedCsvRows=[]; renderCsvImportPreview();
+  await loadQuestions();
 }
 
 async function saveExtracted(){
