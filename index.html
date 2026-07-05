@@ -515,6 +515,16 @@ function renderExtracted(){
   extractedQs.forEach((q,i)=>{
     const d=document.createElement('div');
     d.className='panel'; d.style.background='#fbfdfc';
+    const optRows=['a','b','c','d'].map(lt=>{
+      const key='option_'+lt;
+      const val=q[key]||'';
+      const isCorrect = typeof q.correct==='number' && ['a','b','c','d'][q.correct]===lt;
+      return `<div class="row" style="margin-top:4px;align-items:center">
+        <span class="chip" style="${isCorrect?'background:var(--accent);color:#fff':''}">(${lt})</span>
+        <input type="text" value="${val.replace(/"/g,'&quot;')}" style="flex:1" oninput="extractedQs[${i}].${key}=this.value;renderExtracted()">
+        <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="radio" name="correct${i}" ${isCorrect?'checked':''} onchange="extractedQs[${i}].correct=${['a','b','c','d'].indexOf(lt)};renderExtracted()"> correct</label>
+      </div>`;
+    }).join('');
     d.innerHTML=`
       <div class="row" style="margin-bottom:8px">
         <strong>Q${i+1}</strong>
@@ -522,8 +532,10 @@ function renderExtracted(){
         ${q.has_diagram?'<span class="chip" style="background:var(--warn-soft);color:var(--warn)">needs diagram — add photo manually below</span>':''}
         <button class="danger mini" style="margin-left:auto" onclick="extractedQs.splice(${i},1);renderExtracted()">Discard</button>
       </div>
+      ${q.passage?`<div class="count" style="margin-bottom:6px">Passage: ${q.passage.replace(/</g,'&lt;').slice(0,150)}${q.passage.length>150?'…':''}</div>`:''}
       <textarea rows="4" style="width:100%" oninput="extractedQs[${i}].question_text=this.value">${q.question_text||''}</textarea>
-      <div style="margin-top:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:8px" class="mathprev">${(q.question_text||'').replace(/</g,'&lt;')}</div>`;
+      <div style="margin-top:8px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:8px" class="mathprev">${(q.question_text||'').replace(/</g,'&lt;')}</div>
+      ${optRows?`<div style="margin-top:10px"><label class="count" style="display:block;margin-bottom:4px">Options (tap radio to mark correct)</label>${optRows}</div>`:''}`;
     box.appendChild(d);
   });
   if(extractedQs.length){
@@ -551,7 +563,24 @@ async function saveExtracted(){
     is_krutidev: false,
     image_url:null, use_count:0
   };
-  const rows = extractedQs.map(q=>({...base, question_text:q.question_text, question_type:q.question_type||null}));
+  const rows = extractedQs.map(q=>{
+    const optPairs=[['a',q.option_a],['b',q.option_b],['c',q.option_c],['d',q.option_d]]
+      .filter(([,t])=>t && String(t).trim());
+    const options = optPairs.map(([label,text])=>({label,text}));
+    let answer=null;
+    if(typeof q.correct==='number' && optPairs[q.correct]){
+      answer=`(${optPairs[q.correct][0]}) ${optPairs[q.correct][1]}`;
+    }
+    let questionText=q.question_text||'';
+    if(q.passage) questionText = q.passage.trim()+'\n\n'+questionText;
+    return {...base,
+      question_text: questionText,
+      question_type: q.question_type||(options.length?'MCQ':null),
+      options,
+      answer,
+      match_data: q.question_type==='Match the Column' ? null : null // table stays as text in question_text for now; editable via Edit
+    };
+  });
   const {error} = await sb.from('questions').insert(rows);
   if(error){ st.textContent=''; toast('Save failed: '+error.message); return; }
   toast(rows.length+' questions saved!');
@@ -753,18 +782,39 @@ function qPreviewHTML(q){
   const meta=[q.topic,q.subtopic,q.question_type,q.difficulty,(q.marks?q.marks+'m':''),'used '+(q.use_count||0)+'×'].filter(Boolean).join(' · ');
   const txt=q.question_text?`<div class="${q.is_krutidev?'krutidev':''}" style="white-space:pre-wrap;margin-top:4px">${q.question_text.replace(/</g,'&lt;')}</div>`:'';
   const img=q.image_url?`<img src="${q.image_url}" style="max-width:200px;margin-top:6px;border-radius:6px;border:1px solid var(--line)">`:'';
-  return `<div class="count">${meta}</div>${txt}${img}`;
+  let optsHtml='';
+  if(Array.isArray(q.options)&&q.options.length){
+    optsHtml=`<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">`+
+      q.options.map(o=>`<div style="font-size:14px">(${o.label}) ${(o.text||'').replace(/</g,'&lt;')}</div>`).join('')+
+      `</div>`;
+  }
+  let matchHtml='';
+  if(q.question_type==='Match the Column' && q.match_data){
+    const m=q.match_data;
+    matchHtml=`<table style="margin-top:8px;border-collapse:collapse;font-size:13px"><tr>
+      <th style="border:1px solid var(--line);padding:4px 8px;text-align:left">${m.colA||'Column I'}</th>
+      <th style="border:1px solid var(--line);padding:4px 8px;text-align:left">${m.colB||'Column II'}</th></tr>`+
+      (m.rows||[]).map((r,i)=>`<tr><td style="border:1px solid var(--line);padding:4px 8px">${i+1}. ${r.left||''}</td>
+        <td style="border:1px solid var(--line);padding:4px 8px">${String.fromCharCode(65+i)}. ${r.right||''}</td></tr>`).join('')+
+      `</table>`;
+  }
+  const ans=q.answer?`<div style="margin-top:6px;font-size:12px;color:var(--accent)">Answer: ${q.answer.replace(/</g,'&lt;')}</div>`:'';
+  return `<div class="count">${meta}</div>${txt}${img}${optsHtml}${matchHtml}${ans}`;
 }
 
 function renderBrowse(){
   const pool=browsePool();
   document.getElementById('browseCount').textContent=document.getElementById('gSubject').value?pool.length+' matching question(s)':'';
   const box=document.getElementById('browseList');box.innerHTML='';
-  pool.forEach(q=>{
+  pool.forEach((q,i)=>{
     const inCart=CART.includes(q.id);
     const d=document.createElement('div');
     d.className='panel'; d.style.cssText='background:#fbfdfc;padding:12px;margin-bottom:10px';
-    d.innerHTML=`<div class="row" style="align-items:flex-start">
+    d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)">
+        <strong style="font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px">Question ${i+1}</strong>
+        <button class="ghost mini" onclick="openEdit(${q.id})">✏️ Edit</button>
+      </div>
+      <div class="row" style="align-items:flex-start">
       <input type="checkbox" style="width:auto;margin-top:4px" ${inCart?'checked':''} onchange="toggleCart(${q.id},this.checked)">
       <div style="flex:1">${qPreviewHTML(q)}</div></div>`;
     box.appendChild(d);
