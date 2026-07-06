@@ -68,6 +68,18 @@
   .badge-img{background:var(--accent-soft);color:var(--accent)}
   .badge-eq{background:#eef3fb;color:#33587a}
   @media (max-width:680px){.qrow{flex-wrap:wrap}.qrow .qactions{flex-direction:row;width:100%;justify-content:flex-end}}
+  /* EDIT CARD (matches CBT-style editor) */
+  .card-topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+  .card-topbar h2{margin:0;font-size:16px;color:var(--accent);text-transform:none;letter-spacing:0}
+  .e-split{display:flex;gap:20px;align-items:flex-start}
+  .e-qcol{flex:1;min-width:0}
+  .e-pcol{flex:1;min-width:0;position:sticky;top:80px}
+  .preview-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .preview-head strong{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft)}
+  .opt-row{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+  .opt-letter-btn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .opt-letter-btn.correct{background:var(--accent);color:#fff;border-color:var(--accent)}
+  @media (max-width:680px){.e-qcol,.e-pcol{flex:1 1 100%!important;max-width:100%!important}.e-pcol{position:static}}
   /* PASTE ZONE */
   .pastezone{
     border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;color:var(--ink-soft);
@@ -324,12 +336,16 @@
 
 <!-- QUESTION EDITOR (shared: Library + Selected questions) -->
 <div class="panel" id="editPanel" style="display:none;border-color:var(--accent)">
-  <div class="row" style="margin-bottom:10px">
-    <h2 style="margin:0">✏️ Edit question <span class="count" id="editId"></span></h2>
-    <button style="margin-left:auto" onclick="saveEdit()">💾 Save this question</button>
+  <div class="card-topbar">
+    <h2 id="editTitle">Q — </h2>
+    <div class="row">
+      <button onclick="saveEdit()">💾 Save</button>
+      <button class="danger" onclick="deleteFromEdit()">Delete</button>
+    </div>
   </div>
 
-  <div class="row" style="margin-bottom:12px">
+  <div class="row" style="margin-bottom:10px">
+    <div class="field"><label>Q Number</label><input type="text" id="eQNum" style="width:70px" value="—" disabled></div>
     <div class="field">
       <label>Subject</label>
       <select id="eSubject" onchange="editCascade('subject')"></select>
@@ -361,64 +377,106 @@
     </div>
   </div>
 
-  <div class="field" style="margin-bottom:12px">
-    <label>Question text <span id="eTextSizeLbl" class="count">(100%)</span></label>
-    <textarea id="eText" rows="3" oninput="livePreview()"></textarea>
-    <input type="range" id="eTextSize" min="60" max="160" step="5" value="100" oninput="document.getElementById('eTextSizeLbl').textContent='('+this.value+'%)';livePreview()">
+  <div class="row" style="margin-bottom:12px;gap:20px">
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="eKeepPrev" style="width:auto"> Keep with previous question (stay together &amp; in sequence when shuffling)</label>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="eAddToPaper" style="width:auto" onchange="toggleCart(editQ.id,this.checked)"> Add to paper</label>
   </div>
 
   <div class="field" style="margin-bottom:12px">
-    <label>Question image — paste (Cmd+V), or use buttons</label>
-    <div class="pastezone" id="editPasteZone" tabindex="0"><span>Click here, then paste an image — or use buttons below</span></div>
-    <div class="row" style="margin-top:8px">
-      <label for="editPhotoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📷 Camera / Photos</label>
-      <input type="file" id="editPhotoPick" accept="image/*" style="display:none">
-      <label for="editFilePick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📁 Choose file</label>
-      <input type="file" id="editFilePick" accept="image/*" style="display:none">
-      <button class="danger mini" onclick="removeEditImage()">Remove image</button>
+    <label>Passage (optional — shown above this question and all questions chained after it)</label>
+    <textarea id="ePassage" rows="2" placeholder="Paste the shared passage/case text here. Leave blank if not a passage-based set." oninput="livePreview()"></textarea>
+  </div>
+
+  <div class="e-split">
+    <div class="e-qcol">
+      <div class="field" style="margin-bottom:12px">
+        <label>Question text <span id="eTextSizeLbl" class="count">(100%)</span></label>
+        <textarea id="eText" rows="3" oninput="livePreview()"></textarea>
+        <input type="range" id="eTextSize" min="60" max="160" step="5" value="100" oninput="document.getElementById('eTextSizeLbl').textContent='('+this.value+'%)';livePreview()">
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Equation - LaTeX (optional)</label>
+        <input type="text" id="eEquationLatex" placeholder="e.g. $$\frac{1}{2}mv^2$$" oninput="livePreview()">
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Diagram image (optional) — paste (Cmd+V), or use buttons</label>
+        <div class="pastezone" id="editPasteZone" tabindex="0"><span>Click here, then paste an image — or use buttons below</span></div>
+        <div class="row" style="margin-top:8px">
+          <label for="editPhotoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📷 Camera / Photos</label>
+          <input type="file" id="editPhotoPick" accept="image/*" style="display:none">
+          <label for="editFilePick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📁 Choose file</label>
+          <input type="file" id="editFilePick" accept="image/*" style="display:none">
+          <button class="danger mini" onclick="removeEditImage()">Remove image</button>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Image size: <span id="eWidthVal">100</span>% width</label>
+          <input type="range" id="eWidth" min="20" max="100" step="5" value="100" oninput="document.getElementById('eWidthVal').textContent=this.value;previewEditWidth();livePreview()">
+        </div>
+      </div>
+
+      <!-- MCQ / TRUE-FALSE OPTIONS -->
+      <div class="field" id="optionsBlock" style="margin-bottom:12px;display:none">
+        <label>Options — click letter to mark correct</label>
+        <div id="optionsList"></div>
+        <div class="count" id="correctLabel" style="margin:4px 0"></div>
+        <button class="ghost mini" onclick="addOption()">＋ Add option</button>
+        <button class="ghost mini" onclick="aiOptions()">🤖 AI-generate 4 options (~₹0.5–2)</button>
+      </div>
+
+      <!-- MATCH THE COLUMN -->
+      <div class="field" id="matchBlock" style="margin-bottom:12px;display:none">
+        <label>Match the Column</label>
+        <div class="row" style="margin-bottom:8px">
+          <input type="text" id="matchColA" placeholder="Column A title (e.g. Column I)" style="min-width:160px" oninput="livePreview()">
+          <input type="text" id="matchColB" placeholder="Column B title (e.g. Column II)" style="min-width:160px" oninput="livePreview()">
+        </div>
+        <div id="matchRows"></div>
+        <button class="ghost mini" onclick="addMatchRow()">＋ Add row</button>
+      </div>
+
+      <div class="field" id="answerFieldWrap" style="margin-bottom:12px">
+        <label>Correct answer</label>
+        <input type="text" id="eAnswer" placeholder="e.g. (b), or A-3,B-1,C-4,D-2" oninput="renderOptions();livePreview()">
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Solution (for faculty copy)</label>
+        <textarea id="eSolution" rows="2" placeholder="Explain the answer — shown only in faculty copy"></textarea>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Solution equation - LaTeX (optional)</label>
+        <input type="text" id="eSolutionEquationLatex" placeholder="e.g. $$v = u + at$$">
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Solution image (optional)</label>
+        <div class="pastezone" id="editSolPasteZone" tabindex="0"><span>Click here, then paste an image — or use buttons below</span></div>
+        <div class="row" style="margin-top:8px">
+          <label for="editSolPhotoPick" style="cursor:pointer;background:var(--accent-soft);color:var(--accent);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px">📷 Camera / Photos</label>
+          <input type="file" id="editSolPhotoPick" accept="image/*" style="display:none">
+          <button class="danger mini" onclick="removeEditSolImage()">Remove image</button>
+        </div>
+      </div>
     </div>
-    <div class="field" style="margin-top:8px">
-      <label>Image size: <span id="eWidthVal">100</span>% width</label>
-      <input type="range" id="eWidth" min="20" max="100" step="5" value="100" oninput="document.getElementById('eWidthVal').textContent=this.value;previewEditWidth();livePreview()">
+
+    <div class="e-pcol">
+      <div class="preview-head">
+        <strong>Student Preview</strong>
+        <div class="row" style="align-items:center;gap:8px">
+          <span class="count">Width</span>
+          <input type="range" id="eColWidth" min="20" max="70" step="5" value="50" oninput="applyEditColWidth()">
+          <button class="ghost mini" onclick="livePreview()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div id="editPreview" style="border:1px solid var(--line);border-radius:10px;padding:16px;background:#fff"></div>
+      <p class="count" style="margin-top:8px">Click Refresh after editing to update. Uses student font sizes &amp; colors.</p>
     </div>
   </div>
 
-  <!-- MCQ / TRUE-FALSE OPTIONS -->
-  <div class="field" id="optionsBlock" style="margin-bottom:12px;display:none">
-    <label>Options</label>
-    <div id="optionsList"></div>
-    <button class="ghost mini" onclick="addOption()">＋ Add option</button>
-    <button class="ghost mini" onclick="aiOptions()">🤖 AI-generate 4 options (~₹0.5–2)</button>
-  </div>
-
-  <!-- MATCH THE COLUMN -->
-  <div class="field" id="matchBlock" style="margin-bottom:12px;display:none">
-    <label>Match the Column</label>
-    <div class="row" style="margin-bottom:8px">
-      <input type="text" id="matchColA" placeholder="Column A title (e.g. Column I)" style="min-width:160px" oninput="livePreview()">
-      <input type="text" id="matchColB" placeholder="Column B title (e.g. Column II)" style="min-width:160px" oninput="livePreview()">
-    </div>
-    <div id="matchRows"></div>
-    <button class="ghost mini" onclick="addMatchRow()">＋ Add row</button>
-  </div>
-
-  <div class="field" style="margin-bottom:12px">
-    <label>Correct answer</label>
-    <input type="text" id="eAnswer" placeholder="e.g. (b), or A-3,B-1,C-4,D-2" oninput="livePreview()">
-  </div>
-
-  <div class="field" style="margin-bottom:12px">
-    <label>Solution (for faculty copy)</label>
-    <textarea id="eSolution" rows="2" placeholder="Explain the answer — shown only in faculty copy"></textarea>
-  </div>
-
-  <div class="field" style="margin-bottom:16px">
-    <label>Live preview (as it appears on the generated paper)</label>
-    <button class="ghost mini" style="margin-bottom:8px" onclick="livePreview()">🔄 Refresh preview</button>
-    <div id="editPreview" style="border:1px solid var(--line);border-radius:10px;padding:16px;background:#fff"></div>
-  </div>
-
-  <div class="row">
+  <div class="row" style="margin-top:16px">
     <button onclick="saveEdit()">💾 Save this question</button>
     <button class="ghost" onclick="closeEdit()">Cancel</button>
     <span class="count" id="editStatus"></span>
@@ -1050,6 +1108,7 @@ function inlineCardHTML(q, num, inCart){
   </div>
   <div class="row" style="margin-bottom:8px;align-items:center">
     <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" style="width:auto" ${inCart?'checked':''} onchange="toggleCart(${q.id},this.checked)"> Add to paper</label>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="iKeepPrev-${q.id}" style="width:auto" ${q.keep_with_previous?'checked':''} onchange="livePreviewInline(${q.id})"> Keep with previous</label>
     <select id="iType-${q.id}" onchange="onInlineTypeChange(${q.id})" style="margin-left:auto">
       <option ${q.question_type==='MCQ'?'selected':''}>MCQ</option><option ${q.question_type==='Numerical'?'selected':''}>Numerical</option>
       <option ${q.question_type==='Graphical'?'selected':''}>Graphical</option><option ${q.question_type==='Assertion Reason'?'selected':''}>Assertion Reason</option>
@@ -1058,11 +1117,19 @@ function inlineCardHTML(q, num, inCart){
       <option ${(!q.question_type||q.question_type==='Other')?'selected':''}>Other</option>
     </select>
   </div>
+  <div class="field" style="margin-bottom:8px">
+    <label>Passage (optional)</label>
+    <textarea id="iPassage-${q.id}" rows="2" placeholder="Shared passage/case text — leave blank if none" oninput="livePreviewInline(${q.id})">${(q.passage||'').replace(/</g,'&lt;')}</textarea>
+  </div>
   <div class="row" style="gap:16px;align-items:flex-start;flex-wrap:nowrap">
     <div class="inline-qcol" style="flex:1;min-width:0">
       <div class="field" style="margin-bottom:8px">
         <label>Question text</label>
         <textarea id="iText-${q.id}" rows="4" oninput="livePreviewInline(${q.id})">${(q.question_text||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <label>Equation - LaTeX (optional)</label>
+        <input type="text" id="iEquation-${q.id}" value="${(q.equation_latex||'').replace(/"/g,'&quot;')}" placeholder="e.g. $$\frac{1}{2}mv^2$$" oninput="livePreviewInline(${q.id})">
       </div>
       <div class="field" style="margin-bottom:8px">
         <label>Image</label>
@@ -1138,14 +1205,26 @@ function renderInlineOptions(qid){
   const st=inlineState(qid);
   const box=document.getElementById('iOptionsList-'+qid); if(!box) return;
   box.innerHTML='';
+  const ansEl=document.getElementById('iAnswer-'+qid);
+  const m=(ansEl?ansEl.value:'').match(/\(([a-dA-D])\)/);
+  const correctLetter = m ? m[1].toLowerCase() : null;
   st.options.forEach((o,i)=>{
-    const row=document.createElement('div'); row.className='row'; row.style.marginBottom='5px';
-    row.innerHTML=`<span class="chip">(${o.label})</span>
+    const row=document.createElement('div'); row.className='opt-row';
+    const label=(o.label||String.fromCharCode(97+i)).toLowerCase();
+    const isCorrect = correctLetter && label===correctLetter;
+    row.innerHTML=`<button type="button" class="opt-letter-btn${isCorrect?' correct':''}" onclick="markInlineCorrect(${qid},${i})">${label.toUpperCase()}</button>
       <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="inlineState(${qid}).options[${i}].text=this.value;livePreviewInline(${qid})">
       <button class="danger mini" onclick="inlineState(${qid}).options.splice(${i},1);renderInlineOptions(${qid});livePreviewInline(${qid})">✕</button>`;
     box.appendChild(row);
   });
   renderMath(box);
+}
+function markInlineCorrect(qid,i){
+  const st=inlineState(qid);
+  const label=(st.options[i].label||String.fromCharCode(97+i)).toLowerCase();
+  const ansEl=document.getElementById('iAnswer-'+qid);
+  if(ansEl) ansEl.value='('+label+')';
+  renderInlineOptions(qid); livePreviewInline(qid);
 }
 function addInlineOption(qid){
   const st=inlineState(qid);
@@ -1198,13 +1277,17 @@ function livePreviewInline(qid){
   const textEl=document.getElementById('iText-'+qid);
   const widthEl=document.getElementById('iWidth-'+qid);
   const typeEl=document.getElementById('iType-'+qid);
+  const passageEl=document.getElementById('iPassage-'+qid);
+  const eqEl=document.getElementById('iEquation-'+qid);
   const data={
     question_text: textEl?textEl.value:q.question_text,
     image_url: st.removeImage?null:(st.blob?document.getElementById('iImg-'+qid)?.src:q.image_url),
     image_width: widthEl?Number(widthEl.value):100,
     question_type: typeEl?typeEl.value:q.question_type,
     options: st.options, match_data: st.match,
-    is_krutidev: q.is_krutidev
+    is_krutidev: q.is_krutidev,
+    passage: passageEl?passageEl.value:q.passage,
+    equation_latex: eqEl?eqEl.value:q.equation_latex
   };
   const box=document.getElementById('iPreview-'+qid);
   if(box){ box.innerHTML=questionCardHTML(data); renderMath(box); }
@@ -1222,7 +1305,10 @@ async function saveInline(qid){
     solution_text: document.getElementById('iSolution-'+qid).value.trim()||null,
     image_width: Number(document.getElementById('iWidth-'+qid).value)||100,
     options: (document.getElementById('iOptionsBlock-'+qid).style.display!=='none') ? st.options : [],
-    match_data: (document.getElementById('iMatchBlock-'+qid).style.display!=='none') ? st.match : null
+    match_data: (document.getElementById('iMatchBlock-'+qid).style.display!=='none') ? st.match : null,
+    passage: document.getElementById('iPassage-'+qid).value.trim()||null,
+    equation_latex: document.getElementById('iEquation-'+qid).value.trim()||null,
+    keep_with_previous: document.getElementById('iKeepPrev-'+qid).checked
   };
   if(st.blob){
     const fileName=`q_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
@@ -1625,13 +1711,25 @@ function onTypeChange(){
 
 function renderOptions(){
   const box=document.getElementById('optionsList'); box.innerHTML='';
+  const m=(document.getElementById('eAnswer').value||'').match(/\(([a-dA-D])\)/);
+  const correctLetter = m ? m[1].toLowerCase() : null;
   editOptions.forEach((o,i)=>{
-    const row=document.createElement('div'); row.className='row'; row.style.marginBottom='6px';
-    row.innerHTML=`<span class="chip">(${o.label})</span>
+    const row=document.createElement('div'); row.className='opt-row';
+    const label=(o.label||String.fromCharCode(97+i)).toLowerCase();
+    const isCorrect = correctLetter && label===correctLetter;
+    row.innerHTML=`<button type="button" class="opt-letter-btn${isCorrect?' correct':''}" onclick="markCorrect(${i})">${label.toUpperCase()}</button>
       <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="editOptions[${i}].text=this.value;livePreview()">
       <button class="danger mini" onclick="editOptions.splice(${i},1);renderOptions();livePreview()">✕</button>`;
     box.appendChild(row);
   });
+  const correctOpt = editOptions.find(o=>{const l=(o.label||'').toLowerCase();return correctLetter && l===correctLetter;});
+  const lbl=document.getElementById('correctLabel');
+  if(lbl) lbl.textContent = correctOpt ? 'Correct: Option '+correctOpt.label.toUpperCase() : 'Click a letter above to mark the correct option.';
+}
+function markCorrect(i){
+  const label=(editOptions[i].label||String.fromCharCode(97+i)).toLowerCase();
+  document.getElementById('eAnswer').value='('+label+')';
+  renderOptions(); livePreview();
 }
 function addOption(){
   const nextLabel=String.fromCharCode(97+editOptions.length);
@@ -1660,11 +1758,18 @@ document.getElementById('matchColB').addEventListener('input',e=>{if(editMatch){
 function openEdit(id){
   editQ = QUESTIONS.find(q=>q.id===id); if(!editQ) return;
   editBlob=null; editRemoveImage=false;
+  editSolBlob=null; editSolRemoveImage=false;
   editOptions = Array.isArray(editQ.options)&&editQ.options.length ? JSON.parse(JSON.stringify(editQ.options)) : [];
   editMatch = editQ.match_data ? JSON.parse(JSON.stringify(editQ.match_data)) : null;
 
   document.getElementById('editPanel').style.display='block';
-  document.getElementById('editId').textContent='#'+editQ.id;
+  document.getElementById('editTitle').textContent='Q'+editQ.id+' — '+(editQ.subject||'');
+  document.getElementById('eQNum').value='—';
+  document.getElementById('eKeepPrev').checked=!!editQ.keep_with_previous;
+  document.getElementById('eAddToPaper').checked=CART.includes(editQ.id);
+  document.getElementById('ePassage').value=editQ.passage||'';
+  document.getElementById('eEquationLatex').value=editQ.equation_latex||'';
+  document.getElementById('eSolutionEquationLatex').value=editQ.solution_equation_latex||'';
 
   fillEditSubjectDropdown();
   document.getElementById('eSubject').value=editQ.subject||'';
@@ -1693,12 +1798,35 @@ function openEdit(id){
     z.innerHTML='<span>Click here, then paste an image — or use buttons below</span>';
   }
 
+  const sz=document.getElementById('editSolPasteZone');
+  if(editQ.solution_image_url){
+    sz.classList.add('has-image');
+    sz.innerHTML=`<img id="editSolImgPreview" src="${editQ.solution_image_url}" style="width:100%">`;
+  } else {
+    sz.classList.remove('has-image');
+    sz.innerHTML='<span>Click here, then paste an image — or use buttons below</span>';
+  }
+
   const t=editQ.question_type;
   document.getElementById('optionsBlock').style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type')?'block':'none';
   document.getElementById('matchBlock').style.display=(t==='Match the Column')?'block':'none';
   renderOptions(); renderMatch();
   livePreview();
+  applyEditColWidth();
   document.getElementById('editPanel').scrollIntoView({behavior:'smooth'});
+}
+
+function deleteFromEdit(){
+  if(!editQ) return;
+  deleteQuestion(editQ.id, editQ.image_url||null);
+  closeEdit();
+}
+
+function applyEditColWidth(){
+  const w=Number(document.getElementById('eColWidth').value);
+  const q=document.querySelector('.e-qcol'), p=document.querySelector('.e-pcol');
+  if(q){ q.style.flex=`0 0 ${100-w}%`; q.style.maxWidth=`${100-w}%`; }
+  if(p){ p.style.flex=`0 0 ${w}%`; p.style.maxWidth=`${w}%`; }
 }
 
 function setEditImage(blob){
@@ -1719,6 +1847,32 @@ function previewEditWidth(){
   const img=document.getElementById('editImgPreview');
   if(img) img.style.width=document.getElementById('eWidth').value+'%';
 }
+
+let editSolBlob=null, editSolRemoveImage=false;
+function setEditSolImage(blob){
+  editSolBlob=blob; editSolRemoveImage=false;
+  const z=document.getElementById('editSolPasteZone');
+  z.classList.add('has-image');
+  z.innerHTML=`<img id="editSolImgPreview" src="${URL.createObjectURL(blob)}" style="width:100%">`;
+}
+function removeEditSolImage(){
+  editSolBlob=null; editSolRemoveImage=true;
+  const z=document.getElementById('editSolPasteZone');
+  z.classList.remove('has-image');
+  z.innerHTML='<span>Image will be removed on save</span>';
+}
+document.getElementById('editSolPasteZone').addEventListener('click',()=>document.getElementById('editSolPasteZone').focus());
+document.getElementById('editSolPasteZone').addEventListener('paste', e=>{
+  for(const item of e.clipboardData.items){
+    if(item.type.indexOf('image')===0){ setEditSolImage(item.getAsFile()); e.preventDefault(); return; }
+  }
+  toast('No image found in clipboard.');
+});
+document.getElementById('editSolPhotoPick').addEventListener('change', e=>{
+  const f=e.target.files[0];
+  if(f && f.type.indexOf('image')===0) setEditSolImage(f);
+  e.target.value='';
+});
 function closeEdit(){document.getElementById('editPanel').style.display='none';editQ=null;}
 
 const editZone=document.getElementById('editPasteZone');
@@ -1760,10 +1914,18 @@ function escapeExceptImgTags(text){
 function questionCardHTML(data){
   const size=data.text_size||100;
   let html=`<div class="q" style="font-size:${size}%">`;
+  if(data.passage){
+    const escapedPassage=escapeExceptImgTags(data.passage);
+    html+=`<div class="qtext" style="padding-bottom:8px;margin-bottom:8px;border-bottom:1px dashed var(--line)">${stripInlineImgTags(escapedPassage)}</div>`;
+  }
   if(data.question_text){
     const escaped=escapeExceptImgTags(data.question_text);
     const withImgs=stripInlineImgTags(escaped);
     html+=`<div class="qtext${data.is_krutidev?' krutidev':''}">${withImgs}</div>`;
+  }
+  if(data.equation_latex){
+    const eq=data.equation_latex.trim().replace(/^\${1,2}|\${1,2}$/g,'');
+    html+=`<div class="qtext" style="margin-top:8px">$$${eq}$$</div>`;
   }
   if(data.image_url) html+=`<img src="${data.image_url}" style="width:${data.image_width||100}%;display:block;margin-top:8px;border-radius:8px;border:1px solid var(--line)">`;
   if(data.question_type==='Match the Column' && data.match_data){
@@ -1801,7 +1963,9 @@ function livePreview(){
     question_type: document.getElementById('eType').value,
     options: editOptions,
     match_data: editMatch,
-    is_krutidev: editQ?.is_krutidev
+    is_krutidev: editQ?.is_krutidev,
+    passage: document.getElementById('ePassage').value,
+    equation_latex: document.getElementById('eEquationLatex').value
   };
   const box=document.getElementById('editPreview');
   box.innerHTML = questionCardHTML(data);
@@ -1832,7 +1996,11 @@ async function saveEdit(){
     solution_text: document.getElementById('eSolution').value.trim()||null,
     image_width: Number(document.getElementById('eWidth').value)||100,
     options: (document.getElementById('optionsBlock').style.display!=='none') ? editOptions : [],
-    match_data: (document.getElementById('matchBlock').style.display!=='none') ? editMatch : null
+    match_data: (document.getElementById('matchBlock').style.display!=='none') ? editMatch : null,
+    passage: document.getElementById('ePassage').value.trim()||null,
+    equation_latex: document.getElementById('eEquationLatex').value.trim()||null,
+    keep_with_previous: document.getElementById('eKeepPrev').checked,
+    solution_equation_latex: document.getElementById('eSolutionEquationLatex').value.trim()||null
   };
   if(editBlob){
     const fileName=`q_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
@@ -1843,10 +2011,20 @@ async function saveEdit(){
   } else if(editRemoveImage){
     upd.image_url=null;
   }
+  if(editSolBlob){
+    const solFileName=`sol_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+    const {error:solErr}=await sb.storage.from('question-images').upload(solFileName,editSolBlob,{contentType:editSolBlob.type||'image/png'});
+    if(solErr){ st.textContent=''; toast('Solution image upload failed: '+solErr.message); return; }
+    const {data:solPub}=sb.storage.from('question-images').getPublicUrl(solFileName);
+    upd.solution_image_url=solPub.publicUrl;
+  } else if(editSolRemoveImage){
+    upd.solution_image_url=null;
+  }
   const {error:ue}=await sb.from('questions').update(upd).eq('id',editQ.id);
   if(ue){ st.textContent=''; toast('Save failed: '+ue.message); return; }
   st.textContent=''; toast('Question saved!');
   Object.assign(editQ, upd);
+  toggleCart(editQ.id, document.getElementById('eAddToPaper').checked);
   await loadQuestions();
   renderCart(); renderBrowse();
 }
