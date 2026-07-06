@@ -54,6 +54,20 @@
   .two-col{display:flex;flex-direction:column;gap:14px}
   @media (max-width:680px){.inline-qcol,.inline-pcol{flex:1 1 100%!important;max-width:100%!important}}
   .thumb{width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+  /* LIBRARY CARD ROWS */
+  .qrow{display:flex;gap:14px;padding:14px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff;align-items:flex-start}
+  .qrow .qthumb{flex-shrink:0;width:56px;height:56px;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#eef0f4;font-size:12px;color:var(--ink-soft);font-weight:700}
+  .qrow .qthumb img{width:100%;height:100%;object-fit:cover}
+  .qrow .qmain{flex:1;min-width:0}
+  .qrow .qmeta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center}
+  .qrow .qtext-preview{font-size:13px;color:var(--ink);margin-bottom:8px;word-break:break-word}
+  .qrow .qopts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+  .opt-pill{font-size:11px;padding:3px 9px;border-radius:12px;background:var(--chip);color:var(--ink-soft);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
+  .opt-pill.correct{background:var(--accent);color:#fff}
+  .qrow .qactions{display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0}
+  .badge-img{background:var(--accent-soft);color:var(--accent)}
+  .badge-eq{background:#eef3fb;color:#33587a}
+  @media (max-width:680px){.qrow{flex-wrap:wrap}.qrow .qactions{flex-direction:row;width:100%;justify-content:flex-end}}
   /* PASTE ZONE */
   .pastezone{
     border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;color:var(--ink-soft);
@@ -87,7 +101,7 @@
   <nav class="tabs">
     <button id="tabGen" class="active" onclick="showTab('gen')">Generate Paper</button>
     <button id="tabAdd" onclick="showTab('add')">Add Question</button>
-    <button id="tabLib" onclick="showTab('lib')">Library</button>
+    <button id="tabLib" onclick="showTab('lib')">Library <span class="count" id="libTabCount"></span></button>
   </nav>
 </header>
 
@@ -98,9 +112,11 @@
   <div class="panel" style="border-color:var(--accent)">
     <h2>🤖 AI Extract (from photo of question paper/book)</h2>
     <p class="count" style="margin:0 0 10px">Take a photo of a page → AI reads all questions → you review → save. Uses your API credits (~₹1–3/page). Photos are NOT stored — only clean text.</p>
-    <div class="row">
-      <label for="aiPick" style="cursor:pointer;background:var(--accent);color:#fff;padding:10px 18px;border-radius:9px;font-weight:600;font-size:14px">📄 Photo / PDF / Word → AI Extract</label>
-      <input type="file" id="aiPick" accept="image/*,application/pdf,.docx" style="display:none">
+    <label for="aiPick" class="pastezone" id="aiDropzone" style="cursor:pointer">
+      <span id="aiDropHint">📄 Drag &amp; drop photos / PDFs / Word files here (multiple allowed) — or click to choose</span>
+    </label>
+    <input type="file" id="aiPick" accept="image/*,application/pdf,.docx" multiple style="display:none">
+    <div class="row" style="margin-top:8px">
       <span class="count" id="aiStatus"></span>
     </div>
     <div id="aiResults" style="margin-top:14px"></div>
@@ -302,12 +318,7 @@
       <button class="ghost mini" onclick="clearFilters()">Clear filters</button>
       <button class="ghost mini" onclick="loadQuestions()">Refresh</button>
     </div>
-    <div style="overflow-x:auto">
-      <table id="libTable">
-        <thead><tr><th></th><th>Subject</th><th>Topic</th><th>Subtopic</th><th>Type</th><th>Diff.</th><th>Marks</th><th>Source</th><th>Used</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <div id="libList"></div>
   </div>
 </div>
 
@@ -513,52 +524,71 @@ function fileToB64(f){
 }
 
 document.getElementById('aiPick').addEventListener('change', async e=>{
-  const f=e.target.files[0]; e.target.value='';
-  if(!f) return;
-  const st=document.getElementById('aiStatus');
-  try{
-    if(f.type.indexOf('image')===0){
-      st.textContent='Reading image with AI… (10–30 sec)';
-      extractedQs = await callExtract({imageBase64: await fileToB64(f), mediaType:f.type||'image/jpeg'});
-    }
-    else if(f.type==='application/pdf'){
-      st.textContent='Opening PDF…';
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({data: await f.arrayBuffer()}).promise;
-      const pages = Math.min(pdf.numPages, 20);
-      if(pdf.numPages>20) toast('PDF has '+pdf.numPages+' pages — processing first 20 only.');
-      if(!confirm('This PDF has '+pdf.numPages+' page(s). Each page costs ~₹1–3 in API credits ('+pages+' pages will be scanned). Continue?')){ st.textContent=''; return; }
-      extractedQs=[];
-      for(let p=1;p<=pages;p++){
-        st.textContent='AI reading page '+p+' of '+pages+'…';
-        const page = await pdf.getPage(p);
-        const vp = page.getViewport({scale:2});
-        const canvas=document.createElement('canvas');
-        canvas.width=vp.width; canvas.height=vp.height;
-        await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
-        const b64 = canvas.toDataURL('image/jpeg',0.9).split(',')[1];
-        try{
-          const qs = await callExtract({imageBase64:b64, mediaType:'image/jpeg'});
-          extractedQs.push(...qs);
-        }catch(pe){ toast('Page '+p+' failed: '+pe.message); }
-      }
-    }
-    else if(f.name.toLowerCase().endsWith('.docx')){
-      st.textContent='Reading Word document…';
-      const result = await mammoth.extractRawText({arrayBuffer: await f.arrayBuffer()});
-      const docText = (result.value||'').trim();
-      if(!docText){ st.textContent=''; toast('No text found in that Word file.'); return; }
-      st.textContent='AI extracting questions from document text…';
-      extractedQs = await callExtract({text: docText.slice(0,50000)});
-    }
-    else { st.textContent=''; toast('Unsupported file — use image, PDF, or .docx'); return; }
-
-    st.textContent = extractedQs.length+' question(s) found — review below, then save.';
-    renderExtracted();
-  }catch(err){
-    st.textContent=''; toast('Extraction failed: '+err.message);
-  }
+  const files=Array.from(e.target.files); e.target.value='';
+  await processAIFiles(files);
 });
+
+/* Drag-and-drop support for AI Scan zone */
+const aiDropzone = document.getElementById('aiDropzone');
+aiDropzone.addEventListener('dragover', e=>{e.preventDefault();aiDropzone.classList.add('dragover');});
+aiDropzone.addEventListener('dragleave', ()=>aiDropzone.classList.remove('dragover'));
+aiDropzone.addEventListener('drop', async e=>{
+  e.preventDefault();aiDropzone.classList.remove('dragover');
+  const files=Array.from(e.dataTransfer.files||[]);
+  if(files.length) await processAIFiles(files);
+});
+
+async function processAIFiles(files){
+  if(!files || !files.length) return;
+  const st=document.getElementById('aiStatus');
+  extractedQs = [];
+  for(let fi=0; fi<files.length; fi++){
+    const f=files[fi];
+    const tag = files.length>1 ? `File ${fi+1}/${files.length} (${f.name}): ` : '';
+    try{
+      if(f.type.indexOf('image')===0){
+        st.textContent=tag+'Reading image with AI… (10–30 sec)';
+        const qs = await callExtract({imageBase64: await fileToB64(f), mediaType:f.type||'image/jpeg'});
+        extractedQs.push(...qs);
+      }
+      else if(f.type==='application/pdf'){
+        st.textContent=tag+'Opening PDF…';
+        pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({data: await f.arrayBuffer()}).promise;
+        const pages = Math.min(pdf.numPages, 20);
+        if(pdf.numPages>20) toast(f.name+' has '+pdf.numPages+' pages — processing first 20 only.');
+        if(!confirm(tag+'This PDF has '+pdf.numPages+' page(s). Each page costs ~₹1–3 in API credits ('+pages+' pages will be scanned). Continue?')){ continue; }
+        for(let p=1;p<=pages;p++){
+          st.textContent=tag+'AI reading page '+p+' of '+pages+'…';
+          const page = await pdf.getPage(p);
+          const vp = page.getViewport({scale:2});
+          const canvas=document.createElement('canvas');
+          canvas.width=vp.width; canvas.height=vp.height;
+          await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+          const b64 = canvas.toDataURL('image/jpeg',0.9).split(',')[1];
+          try{
+            const qs = await callExtract({imageBase64:b64, mediaType:'image/jpeg'});
+            extractedQs.push(...qs);
+          }catch(pe){ toast(f.name+' page '+p+' failed: '+pe.message); }
+        }
+      }
+      else if(f.name.toLowerCase().endsWith('.docx')){
+        st.textContent=tag+'Reading Word document…';
+        const result = await mammoth.extractRawText({arrayBuffer: await f.arrayBuffer()});
+        const docText = (result.value||'').trim();
+        if(!docText){ toast('No text found in '+f.name+'.'); continue; }
+        st.textContent=tag+'AI extracting questions from document text…';
+        const qs = await callExtract({text: docText.slice(0,50000)});
+        extractedQs.push(...qs);
+      }
+      else { toast('Unsupported file: '+f.name+' — use image, PDF, or .docx'); continue; }
+    }catch(err){
+      toast('Extraction failed for '+f.name+': '+err.message);
+    }
+  }
+  st.textContent = extractedQs.length+' question(s) found — review below, then save.';
+  renderExtracted();
+}
 
 function renderExtracted(){
   const box=document.getElementById('aiResults'); box.innerHTML='';
@@ -1486,10 +1516,15 @@ function clearFilters(){
   renderLibrary();
 }
 
+function truncateText(str, n){
+  str=(str||'').replace(/\s+/g,' ').trim();
+  return str.length>n ? str.slice(0,n)+'…' : str;
+}
+
 function renderLibrary(){
   const v=id=>document.getElementById(id)?.value||'';
   const search=v('libSearch').toLowerCase();
-  const tb=document.querySelector('#libTable tbody');tb.innerHTML='';
+  const container=document.getElementById('libList'); container.innerHTML='';
   const filtered = QUESTIONS.filter(q=>{
     if(v('flSubject')&&q.subject!==v('flSubject'))return false;
     if(v('flTopic')&&q.topic!==v('flTopic'))return false;
@@ -1502,20 +1537,52 @@ function renderLibrary(){
     if(search && ![q.subject,q.topic,q.subtopic,q.source,q.question_type,q.question_text].filter(Boolean).join(' ').toLowerCase().includes(search))return false;
     return true;
   });
-  filtered.forEach(q=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${q.image_url?'<img class="thumb" src="'+q.image_url+'">':''}</td>
-      <td>${q.subject}</td><td>${q.topic||''}</td><td>${q.subtopic||''}</td>
-      <td>${q.question_type?'<span class="chip">'+q.question_type+'</span>':''}</td>
-      <td>${q.difficulty||''}</td><td>${q.marks||''}</td>
-      <td style="max-width:140px">${q.source||''}</td>
-      <td>${q.use_count||0}</td>
-      <td style="white-space:nowrap"><button class="ghost mini" onclick="openEdit(${q.id})">Edit</button>
-      <button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button></td>`;
-    tb.appendChild(tr);
-  });
+
+  if(!filtered.length){
+    container.innerHTML='<p class="count">No questions found.</p>';
+  } else {
+    filtered.forEach(q=>{
+      const hasImg = !!q.image_url;
+      const hasEq = /\$[^$]+\$/.test(q.question_text||'');
+      const textPreview = truncateText(q.question_text||'', 120).replace(/</g,'&lt;');
+      const correctMatch = (q.answer||'').match(/\(([a-dA-D])\)/);
+      const correctLetter = correctMatch ? correctMatch[1].toLowerCase() : null;
+      const optsHtml = Array.isArray(q.options) && q.options.length
+        ? `<div class="qopts">`+q.options.map(o=>{
+            const isCorrect = o.label && correctLetter && o.label.toLowerCase()===correctLetter;
+            const label=(o.label||'').toUpperCase();
+            return `<span class="opt-pill${isCorrect?' correct':''}">(${label}) ${truncateText(o.text||'',18).replace(/</g,'&lt;')}</span>`;
+          }).join('')+`</div>`
+        : '';
+      const row=document.createElement('div');
+      row.className='qrow';
+      row.innerHTML=`
+        <div class="qthumb">${hasImg?`<img src="${q.image_url}">`:`Q${q.id}`}</div>
+        <div class="qmain">
+          <div class="qmeta">
+            <span class="chip">${q.subject||''}</span>
+            ${q.topic?`<span class="chip">${q.topic}</span>`:''}
+            ${q.question_type?`<span class="chip">${q.question_type}</span>`:''}
+            ${q.difficulty?`<span class="chip">${q.difficulty}</span>`:''}
+            ${hasImg?'<span class="chip badge-img">image</span>':''}
+            ${hasEq?'<span class="chip badge-eq">eq</span>':''}
+          </div>
+          <div class="qtext-preview">${textPreview||'<em>No text</em>'}</div>
+          ${optsHtml}
+          <div class="count">Used ${q.use_count||0}×${q.source?(' · '+q.source):''}</div>
+        </div>
+        <div class="qactions">
+          <button class="ghost mini" onclick="openEdit(${q.id})">Edit</button>
+          <button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button>
+        </div>`;
+      container.appendChild(row);
+    });
+    renderMath(container);
+  }
   document.getElementById('libCount').textContent='('+filtered.length+' of '+QUESTIONS.length+')';
+  document.getElementById('libTabCount').textContent='('+QUESTIONS.length+')';
 }
+
 
 /* ---------- QUESTION EDITOR ---------- */
 let editQ=null, editBlob=null, editRemoveImage=false;
