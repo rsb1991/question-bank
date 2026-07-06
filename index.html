@@ -79,6 +79,9 @@
   .opt-row{display:flex;gap:10px;align-items:center;margin-bottom:8px}
   .opt-letter-btn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px}
   .opt-letter-btn.correct{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .opt-imgzone{width:36px;height:36px;border:1px dashed var(--line);border-radius:6px;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--ink-soft);cursor:pointer;background:#fafbfc}
+  .opt-imgzone img{width:100%;height:100%;object-fit:cover}
+  .opt-imgzone:focus{outline:2px solid var(--accent)}
   @media (max-width:680px){.e-qcol,.e-pcol{flex:1 1 100%!important;max-width:100%!important}.e-pcol{position:static}}
   /* PASTE ZONE */
   .pastezone{
@@ -104,6 +107,9 @@
     header.top,.panel,.help,.noprint{display:none!important}
     body{background:#fff} .wrap{padding:0;max-width:100%} #paper{display:block!important}
   }
+  .floating-home{position:fixed;bottom:24px;right:24px;width:50px;height:50px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer;z-index:200;border:none;transition:opacity .2s}
+  .floating-home:hover{opacity:.9}
+  @media print{.floating-home{display:none!important}}
 </style>
 </head>
 <body>
@@ -486,6 +492,8 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<button class="floating-home noprint" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Scroll to top" aria-label="Scroll to top">⌂</button>
+<input type="file" id="optImgPicker" accept="image/*" style="display:none">
 
 <script>
 /* ---------- SUPABASE SETUP ---------- */
@@ -505,6 +513,11 @@ function toast(msg){
   t.textContent=msg;t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2200);
 }
+
+document.getElementById('optImgPicker').addEventListener('change', e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(f && optImgTarget) setOptionImage(optImgTarget.ctx, optImgTarget.qid, optImgTarget.idx, f);
+});
 
 /* ---------- TABS ---------- */
 function showTab(name){
@@ -1073,6 +1086,28 @@ function qPreviewHTML(q){
   return `<div class="count">${meta}</div>${txt}${img}${optsHtml}${matchHtml}${ans}`;
 }
 
+function inlineCascade(qid, level){
+  const sub=document.getElementById('iSubject-'+qid).value;
+  const top=document.getElementById('iTopic-'+qid);
+  const stp=document.getElementById('iSubtopic-'+qid);
+  if(level==='subject'){
+    const topics=[...new Set(QUESTIONS.filter(q=>q.subject===sub).map(q=>q.topic).filter(Boolean))].sort();
+    top.innerHTML='<option value="">—</option>'+topics.map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New topic…</option>';
+  }
+  const t=top.value;
+  const subs=[...new Set(QUESTIONS.filter(q=>q.subject===sub&&(!t||q.topic===t)&&q.subtopic).map(q=>q.subtopic))].sort();
+  stp.innerHTML='<option value="">—</option>'+subs.map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New subtopic…</option>';
+}
+function fillInlineTagDropdowns(q){
+  const s=document.getElementById('iSubject-'+q.id);
+  s.innerHTML=uniq('subject').map(v=>`<option>${v}</option>`).join('')+'<option value="__new__">＋ New subject…</option>';
+  s.value=q.subject||'';
+  inlineCascade(q.id,'subject');
+  document.getElementById('iTopic-'+q.id).value=q.topic||'';
+  inlineCascade(q.id,'topic');
+  document.getElementById('iSubtopic-'+q.id).value=q.subtopic||'';
+}
+
 function renderBrowse(){
   const pool=browsePool();
   const countText=document.getElementById('gSubject').value?pool.length+' matching question(s)':'';
@@ -1086,6 +1121,7 @@ function renderBrowse(){
     d.id='card-'+q.id;
     d.innerHTML = inlineCardHTML(q, i+1, inCart);
     box.appendChild(d);
+    fillInlineTagDropdowns(q);
     renderInlineOptions(q.id);
     renderInlineMatch(q.id);
     livePreviewInline(q.id);
@@ -1105,6 +1141,13 @@ function inlineCardHTML(q, num, inCart){
       <button onclick="saveInline(${q.id})">Save</button>
       <button class="danger mini" onclick="deleteQuestion(${q.id}, ${q.image_url?`'${q.image_url}'`:null})">Delete</button>
     </div>
+  </div>
+  <div class="row" style="margin-bottom:8px;gap:8px">
+    <div class="field"><label style="font-size:11px">Subject</label><select id="iSubject-${q.id}" onchange="inlineCascade(${q.id},'subject')" style="min-width:110px"></select></div>
+    <div class="field"><label style="font-size:11px">Topic</label><select id="iTopic-${q.id}" onchange="inlineCascade(${q.id},'topic')" style="min-width:110px"></select></div>
+    <div class="field"><label style="font-size:11px">Subtopic</label><select id="iSubtopic-${q.id}" style="min-width:110px"></select></div>
+    <div class="field"><label style="font-size:11px">Difficulty</label><select id="iDiff-${q.id}"><option value="">—</option><option ${q.difficulty==='Easy'?'selected':''}>Easy</option><option ${q.difficulty==='Medium'?'selected':''}>Medium</option><option ${q.difficulty==='Tough'?'selected':''}>Tough</option></select></div>
+    <div class="field"><label style="font-size:11px">Marks</label><input type="number" id="iMarks-${q.id}" value="${q.marks||''}" style="width:70px"></div>
   </div>
   <div class="row" style="margin-bottom:8px;align-items:center">
     <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" style="width:auto" ${inCart?'checked':''} onchange="toggleCart(${q.id},this.checked)"> Add to paper</label>
@@ -1193,9 +1236,9 @@ function inlineState(qid){
 function onInlineTypeChange(qid){
   const t=document.getElementById('iType-'+qid).value;
   const st=inlineState(qid);
-  document.getElementById('iOptionsBlock-'+qid).style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type')?'block':'none';
+  document.getElementById('iOptionsBlock-'+qid).style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column')?'block':'none';
   document.getElementById('iMatchBlock-'+qid).style.display=(t==='Match the Column')?'block':'none';
-  if(t==='MCQ' && st.options.length===0) st.options=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
+  if((t==='MCQ'||t==='Match the Column') && st.options.length===0) st.options=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
   if(t==='True or False' && st.options.length===0) st.options=[{label:'a',text:'True'},{label:'b',text:'False'}];
   if(t==='Match the Column' && !st.match) st.match={colA:'Column I',colB:'Column II',rows:[{left:'',right:''},{left:'',right:''}]};
   renderInlineOptions(qid); renderInlineMatch(qid); livePreviewInline(qid);
@@ -1214,6 +1257,9 @@ function renderInlineOptions(qid){
     const isCorrect = correctLetter && label===correctLetter;
     row.innerHTML=`<button type="button" class="opt-letter-btn${isCorrect?' correct':''}" onclick="markInlineCorrect(${qid},${i})">${label.toUpperCase()}</button>
       <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="inlineState(${qid}).options[${i}].text=this.value;livePreviewInline(${qid})">
+      <div class="opt-imgzone" id="optImgZone-inline-${qid}-${i}" tabindex="0">${o.image_url?`<img src="${o.image_url}">`:'img'}</div>
+      <button class="ghost mini" onclick="pickOptionImage('inline',${qid},${i})">Upload</button>
+      ${o.image_url?`<button class="danger mini" onclick="removeOptionImage('inline',${qid},${i})">✕img</button>`:''}
       <button class="danger mini" onclick="inlineState(${qid}).options.splice(${i},1);renderInlineOptions(${qid});livePreviewInline(${qid})">✕</button>`;
     box.appendChild(row);
   });
@@ -1298,7 +1344,15 @@ async function saveInline(qid){
   const st=inlineState(qid);
   const statusEl=document.getElementById('iStatus-'+qid);
   statusEl.textContent='Saving…';
+  const subject = await resolveNewTag('iSubject-'+qid,'subject') || q.subject;
+  const topic = await resolveNewTag('iTopic-'+qid,'topic');
+  const subtopic = await resolveNewTag('iSubtopic-'+qid,'subtopic');
+  try{ await uploadOptionImages('inline', qid, st.options); }
+  catch(e){ statusEl.textContent=''; toast(e.message); return; }
   const upd={
+    subject, topic: topic||null, subtopic: subtopic||null,
+    difficulty: document.getElementById('iDiff-'+qid).value||null,
+    marks: document.getElementById('iMarks-'+qid).value?Number(document.getElementById('iMarks-'+qid).value):null,
     question_type: document.getElementById('iType-'+qid).value,
     question_text: document.getElementById('iText-'+qid).value.trim()||null,
     answer: document.getElementById('iAnswer-'+qid).value.trim()||null,
@@ -1386,10 +1440,9 @@ function renderCart(){
     d.className='panel'; d.style.cssText='background:#fbfdfc;padding:12px;margin-bottom:10px';
     d.innerHTML=`<div class="row" style="margin-bottom:6px">
         <strong>Q${i+1}</strong><span class="chip">${q.subject}</span>
-        <button class="ghost mini" onclick="openEdit(${q.id})">✏️ Edit</button>
         <button class="ghost mini" onclick="moveCart(${i},-1)">↑</button>
         <button class="ghost mini" onclick="moveCart(${i},1)">↓</button>
-        <button class="danger mini" style="margin-left:auto" onclick="toggleCart(${q.id},false)">Remove</button>
+        <button class="danger mini" style="margin-left:auto" onclick="toggleCart(${q.id},false)">Remove from paper</button>
       </div>${qPreviewHTML(q)}`;
     box.appendChild(d);
   });
@@ -1672,8 +1725,44 @@ function renderLibrary(){
 
 /* ---------- QUESTION EDITOR ---------- */
 let editQ=null, editBlob=null, editRemoveImage=false;
-let editOptions=[]; // [{label, text}]
+let editOptions=[]; // [{label, text, image_url}]
 let editMatch=null; // {colA,colB,rows:[{left,right}]}
+
+/* ---------- PER-OPTION IMAGES (upload or paste, shared by edit panel + browse cards) ---------- */
+const OPT_IMG_BLOBS={}, OPT_IMG_REMOVE={};
+let optImgTarget=null; // {ctx:'edit'|'inline', qid, idx}
+function optImgKey(ctx,qid,idx){ return ctx+':'+(qid==null?'0':qid)+':'+idx; }
+function pickOptionImage(ctx,qid,idx){
+  optImgTarget={ctx,qid,idx};
+  document.getElementById('optImgPicker').click();
+}
+function setOptionImage(ctx,qid,idx,blob){
+  const key=optImgKey(ctx,qid,idx);
+  OPT_IMG_BLOBS[key]=blob; delete OPT_IMG_REMOVE[key];
+  const url=URL.createObjectURL(blob);
+  if(ctx==='edit'){ editOptions[idx].image_url=url; renderOptions(); livePreview(); }
+  else { inlineState(qid).options[idx].image_url=url; renderInlineOptions(qid); livePreviewInline(qid); }
+}
+function removeOptionImage(ctx,qid,idx){
+  const key=optImgKey(ctx,qid,idx);
+  delete OPT_IMG_BLOBS[key]; OPT_IMG_REMOVE[key]=true;
+  if(ctx==='edit'){ editOptions[idx].image_url=null; renderOptions(); livePreview(); }
+  else { inlineState(qid).options[idx].image_url=null; renderInlineOptions(qid); livePreviewInline(qid); }
+}
+document.addEventListener('click', e=>{
+  const zone=e.target.closest('.opt-imgzone');
+  if(zone) zone.focus();
+});
+document.addEventListener('paste', e=>{
+  const active=document.activeElement;
+  if(!active || !active.id || !active.id.startsWith('optImgZone-')) return;
+  const parts=active.id.split('-'); // optImgZone-ctx-qid-idx
+  const ctx=parts[1], qid=(ctx==='inline'?Number(parts[2]):null), idx=Number(parts[3]);
+  for(const item of e.clipboardData.items){
+    if(item.type.indexOf('image')===0){ setOptionImage(ctx,qid,idx,item.getAsFile()); e.preventDefault(); return; }
+  }
+  toast('No image found in clipboard.');
+});
 
 function editCascade(level){
   const sub=document.getElementById('eSubject').value;
@@ -1695,9 +1784,9 @@ function fillEditSubjectDropdown(){
 
 function onTypeChange(){
   const t=document.getElementById('eType').value;
-  document.getElementById('optionsBlock').style.display = (t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type') ? 'block':'none';
+  document.getElementById('optionsBlock').style.display = (t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column') ? 'block':'none';
   document.getElementById('matchBlock').style.display = (t==='Match the Column') ? 'block':'none';
-  if((t==='MCQ') && editOptions.length===0){
+  if((t==='MCQ'||t==='Match the Column') && editOptions.length===0){
     editOptions=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
   }
   if(t==='True or False' && editOptions.length===0){
@@ -1719,6 +1808,9 @@ function renderOptions(){
     const isCorrect = correctLetter && label===correctLetter;
     row.innerHTML=`<button type="button" class="opt-letter-btn${isCorrect?' correct':''}" onclick="markCorrect(${i})">${label.toUpperCase()}</button>
       <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="editOptions[${i}].text=this.value;livePreview()">
+      <div class="opt-imgzone" id="optImgZone-edit-0-${i}" tabindex="0">${o.image_url?`<img src="${o.image_url}">`:'img'}</div>
+      <button class="ghost mini" onclick="pickOptionImage('edit',null,${i})">Upload</button>
+      ${o.image_url?`<button class="danger mini" onclick="removeOptionImage('edit',null,${i})">✕img</button>`:''}
       <button class="danger mini" onclick="editOptions.splice(${i},1);renderOptions();livePreview()">✕</button>`;
     box.appendChild(row);
   });
@@ -1808,7 +1900,7 @@ function openEdit(id){
   }
 
   const t=editQ.question_type;
-  document.getElementById('optionsBlock').style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type')?'block':'none';
+  document.getElementById('optionsBlock').style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column')?'block':'none';
   document.getElementById('matchBlock').style.display=(t==='Match the Column')?'block':'none';
   renderOptions(); renderMatch();
   livePreview();
@@ -1938,14 +2030,18 @@ function questionCardHTML(data){
         <td style="border:1px solid var(--line);padding:6px">${String.fromCharCode(65+i)}. ${r.right||''}</td></tr>`;
     });
     html+=`</table>`;
-  } else if(Array.isArray(data.options) && data.options.length){
+  }
+  if(Array.isArray(data.options) && data.options.length){
     // Stacked lettered-circle options, matching CBT's QuestionRenderer style
     html+=`<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">`;
     data.options.forEach((o,i)=>{
       const letter=(o.label||['a','b','c','d'][i]||'').toUpperCase();
       html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:9px">
         <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:var(--ink-soft);font-weight:700;font-size:12px">${letter}</div>
-        <div style="flex:1;padding-top:1px">${(o.text||'').replace(/</g,'&lt;')}</div>
+        <div style="flex:1;padding-top:1px">
+          ${(o.text||'').replace(/</g,'&lt;')}
+          ${o.image_url?`<img src="${o.image_url}" style="max-width:160px;display:block;margin-top:6px;border-radius:6px;border:1px solid var(--line)">`:''}
+        </div>
       </div>`;
     });
     html+=`</div>`;
@@ -1977,6 +2073,25 @@ async function resolveNewTag(selectId, inputPrefix){
   return sel.value==='__new__' ? (prompt('Enter new '+inputPrefix+':')||'').trim() : sel.value;
 }
 
+async function uploadOptionImages(ctx, qid, options){
+  for(let i=0;i<options.length;i++){
+    const key=optImgKey(ctx,qid,i);
+    if(OPT_IMG_BLOBS[key]){
+      const fn=`opt_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`;
+      const blob=OPT_IMG_BLOBS[key];
+      const {error}=await sb.storage.from('question-images').upload(fn,blob,{contentType:blob.type||'image/png'});
+      if(error) throw new Error('Option image upload failed: '+error.message);
+      const {data:pub}=sb.storage.from('question-images').getPublicUrl(fn);
+      options[i].image_url=pub.publicUrl;
+      delete OPT_IMG_BLOBS[key];
+    } else if(OPT_IMG_REMOVE[key]){
+      options[i].image_url=null;
+      delete OPT_IMG_REMOVE[key];
+    }
+  }
+  return options;
+}
+
 async function saveEdit(){
   if(!editQ) return;
   const st=document.getElementById('editStatus'); st.textContent='Saving…';
@@ -1984,6 +2099,9 @@ async function saveEdit(){
   const subject = await resolveNewTag('eSubject','subject') || editQ.subject;
   const topic = await resolveNewTag('eTopic','topic');
   const subtopic = await resolveNewTag('eSubtopic','subtopic');
+
+  try{ await uploadOptionImages('edit', null, editOptions); }
+  catch(e){ st.textContent=''; toast(e.message); return; }
 
   const upd={
     subject, topic: topic||null, subtopic: subtopic||null,
