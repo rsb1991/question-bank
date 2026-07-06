@@ -200,24 +200,27 @@
 <div id="pane-gen">
   <div class="help"><strong>Build a paper:</strong> pick Subject → Topic → Subtopic, then either browse &amp; tick questions, or auto-add N random ones. Review/edit everything in "Selected questions" before generating.</div>
 
-  <div class="panel">
-    <h2>1 · Pick questions</h2>
+  <div class="row" style="margin-bottom:16px;gap:6px">
+    <button id="subtabBrowseBtn" onclick="showGenSubtab('browse')" style="font-weight:700">🔍 Browse</button>
+    <button id="subtabAutoBtn" class="ghost" onclick="showGenSubtab('auto')" style="font-weight:700">🎲 Auto-add</button>
+    <button id="subtabCartBtn" class="ghost" onclick="showGenSubtab('cart')" style="font-weight:700">✅ Selected <span class="count" id="cartTabCount">(0)</span></button>
+    <button id="subtabSettingsBtn" class="ghost" onclick="showGenSubtab('settings')" style="font-weight:700">⚙️ Paper Settings</button>
+  </div>
+
+  <div class="row" style="margin-bottom:12px">
+    <div class="field"><label>Subject</label><select id="gSubject" onchange="cascade('subject')"><option value="">—</option></select></div>
+    <div class="field"><label>Topic</label><select id="gTopic" onchange="cascade('topic')"><option value="">All</option></select></div>
+    <div class="field"><label>Subtopic</label><select id="gSubtopic" onchange="renderBrowse()"><option value="">All</option></select></div>
+    <div class="field"><label>Difficulty</label><select id="diffFilter" onchange="renderBrowse()"><option value="">Any</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
+    <div class="field"><label>Type</label><select id="typeFilter" onchange="renderBrowse()"><option value="">Any</option></select></div>
+    <div class="field"><label>Medium</label><select id="mediumFilter" onchange="renderBrowse()"><option value="">Any</option><option>English</option><option>Hindi</option></select></div>
+  </div>
+
+  <!-- SUB-TAB: BROWSE -->
+  <div class="panel" id="subtab-browse">
+    <h2>🔍 Browse &amp; tick questions</h2>
     <div class="row" style="margin-bottom:12px">
-      <div class="field"><label>Subject</label><select id="gSubject" onchange="cascade('subject')"><option value="">—</option></select></div>
-      <div class="field"><label>Topic</label><select id="gTopic" onchange="cascade('topic')"><option value="">All</option></select></div>
-      <div class="field"><label>Subtopic</label><select id="gSubtopic" onchange="renderBrowse()"><option value="">All</option></select></div>
-      <div class="field"><label>Difficulty</label><select id="diffFilter" onchange="renderBrowse()"><option value="">Any</option><option>Easy</option><option>Medium</option><option>Tough</option></select></div>
-      <div class="field"><label>Type</label><select id="typeFilter" onchange="renderBrowse()"><option value="">Any</option></select></div>
-      <div class="field"><label>Medium</label><select id="mediumFilter" onchange="renderBrowse()"><option value="">Any</option><option>English</option><option>Hindi</option></select></div>
-    </div>
-    <div class="row" style="margin-bottom:12px">
-      <div class="field"><label>Auto-add random</label>
-        <div class="row">
-          <input type="number" id="autoN" min="1" value="5" style="width:80px">
-          <button class="ghost" onclick="autoAdd()">＋ Add random</button>
-        </div>
-      </div>
-      <span class="count" id="browseCount" style="margin-top:20px"></span>
+      <span class="count" id="browseCount"></span>
     </div>
     <div class="row" style="margin-bottom:12px">
       <div class="field"><label>Student preview width: <span id="colWidthVal">50</span>%</label>
@@ -227,9 +230,25 @@
     <div id="browseList" class="two-col"></div>
   </div>
 
-  <div class="panel" id="cartPanel">
+  <!-- SUB-TAB: AUTO-ADD -->
+  <div class="panel" id="subtab-auto" style="display:none">
+    <h2>🎲 Auto-add random questions</h2>
+    <p class="count" style="margin:0 0 12px">Uses the Subject/Topic/Subtopic/filters set above.</p>
+    <div class="row">
+      <div class="field"><label>How many to add</label>
+        <div class="row">
+          <input type="number" id="autoN" min="1" value="5" style="width:80px">
+          <button onclick="autoAdd()">＋ Add random</button>
+        </div>
+      </div>
+      <span class="count" id="autoBrowseCount" style="margin-top:20px"></span>
+    </div>
+  </div>
+
+  <!-- SUB-TAB: SELECTED / CART -->
+  <div class="panel" id="subtab-cart" style="display:none">
     <div class="row" style="margin-bottom:10px">
-      <h2 style="margin:0">2 · Selected questions <span class="count" id="cartCount">(0)</span></h2>
+      <h2 style="margin:0">✅ Selected questions <span class="count" id="cartCount">(0)</span></h2>
       <button style="margin-left:auto" onclick="saveAllCart()">💾 Save all edits</button>
       <button class="ghost" onclick="exportForCBT()">⬇ Export for CBT app</button>
     </div>
@@ -240,8 +259,8 @@
     </div>
   </div>
 
-  <div class="panel">
-    <h2>3 · Paper settings</h2>
+  <div class="panel" id="subtab-settings" style="display:none">
+    <h2>⚙️ Paper settings</h2>
     <div class="row" style="margin-bottom:12px">
       <div class="field"><label>Paper title</label><input type="text" id="paperTitle" value="Practice Paper" style="min-width:220px"></div>
       <div class="field"><label>Total marks (optional)</label><input type="text" id="paperMarks" placeholder="e.g. 100" style="width:130px"></div>
@@ -257,7 +276,11 @@
   <div class="panel noprint" id="paperActions" style="display:none">
     <h2>Your paper is ready</h2>
     <p class="count">Use count of each included question has been increased.</p>
-    <button onclick="window.print()">Print / Save as PDF</button>
+    <div class="row">
+      <button onclick="window.print()">🖨️ Print / Save Question Paper</button>
+      <button class="ghost" onclick="downloadAnswerKey()">🔑 Download Answer Key</button>
+      <button class="ghost" onclick="downloadFacultyCopy()">👩‍🏫 Download Faculty Copy</button>
+    </div>
   </div>
 </div>
 
@@ -373,6 +396,11 @@
     <input type="text" id="eAnswer" placeholder="e.g. (b), or A-3,B-1,C-4,D-2" oninput="livePreview()">
   </div>
 
+  <div class="field" style="margin-bottom:12px">
+    <label>Solution (for faculty copy)</label>
+    <textarea id="eSolution" rows="2" placeholder="Explain the answer — shown only in faculty copy"></textarea>
+  </div>
+
   <div class="field" style="margin-bottom:16px">
     <label>Live preview (as it appears on the generated paper)</label>
     <button class="ghost mini" style="margin-bottom:8px" onclick="livePreview()">🔄 Refresh preview</button>
@@ -418,6 +446,18 @@ function showTab(name){
   document.getElementById('tabAdd').classList.toggle('active',name==='add');
   document.getElementById('tabLib').classList.toggle('active',name==='lib');
   if(name==='lib') renderLibrary();
+}
+
+function showGenSubtab(name){
+  document.getElementById('subtab-browse').style.display = name==='browse'?'block':'none';
+  document.getElementById('subtab-auto').style.display = name==='auto'?'block':'none';
+  document.getElementById('subtab-cart').style.display = name==='cart'?'block':'none';
+  document.getElementById('subtab-settings').style.display = name==='settings'?'block':'none';
+  document.getElementById('subtabBrowseBtn').classList.toggle('ghost',name!=='browse');
+  document.getElementById('subtabAutoBtn').classList.toggle('ghost',name!=='auto');
+  document.getElementById('subtabCartBtn').classList.toggle('ghost',name!=='cart');
+  document.getElementById('subtabSettingsBtn').classList.toggle('ghost',name!=='settings');
+  if(name==='cart') renderCart();
 }
 
 /* ---------- PASTE IMAGE HANDLING ---------- */
@@ -679,6 +719,7 @@ async function saveCsvImport(){
     question_text:q.question_text, question_type:q.question_type,
     difficulty:q.difficulty, options:q.options, answer:q.answer,
     match_data:q.match_data, image_url:q.image_url, source:q.source,
+    solution_text:q.solution_note||null,
     medium:'English', is_krutidev:false, use_count:0
   }));
   const {error}=await sb.from('questions').insert(rows);
@@ -719,6 +760,7 @@ async function saveExtracted(){
       question_type: q.question_type||(options.length?'MCQ':null),
       options,
       answer,
+      solution_text: q.solution_text||null,
       match_data: q.question_type==='Match the Column' ? null : null // table stays as text in question_text for now; editable via Edit
     };
   });
@@ -945,7 +987,9 @@ function qPreviewHTML(q){
 
 function renderBrowse(){
   const pool=browsePool();
-  document.getElementById('browseCount').textContent=document.getElementById('gSubject').value?pool.length+' matching question(s)':'';
+  const countText=document.getElementById('gSubject').value?pool.length+' matching question(s)':'';
+  document.getElementById('browseCount').textContent=countText;
+  document.getElementById('autoBrowseCount').textContent=countText;
   const box=document.getElementById('browseList');box.innerHTML='';
   pool.forEach((q,i)=>{
     const inCart=CART.includes(q.id);
@@ -1020,6 +1064,10 @@ function inlineCardHTML(q, num, inCart){
       <div class="field" style="margin-bottom:4px">
         <label>Correct answer</label>
         <input type="text" id="iAnswer-${q.id}" value="${(q.answer||'').replace(/"/g,'&quot;')}" placeholder="e.g. (b)" oninput="livePreviewInline(${q.id})">
+      </div>
+      <div class="field" style="margin-bottom:4px">
+        <label>Solution (for faculty copy)</label>
+        <textarea id="iSolution-${q.id}" rows="2" placeholder="Explain the answer — shown only in faculty copy">${(q.solution_text||'').replace(/</g,'&lt;')}</textarea>
       </div>
       <div class="count" style="margin-top:4px">${[q.topic,q.subtopic,q.difficulty,'used '+(q.use_count||0)+'×'].filter(Boolean).join(' · ')}</div>
     </div>
@@ -1141,6 +1189,7 @@ async function saveInline(qid){
     question_type: document.getElementById('iType-'+qid).value,
     question_text: document.getElementById('iText-'+qid).value.trim()||null,
     answer: document.getElementById('iAnswer-'+qid).value.trim()||null,
+    solution_text: document.getElementById('iSolution-'+qid).value.trim()||null,
     image_width: Number(document.getElementById('iWidth-'+qid).value)||100,
     options: (document.getElementById('iOptionsBlock-'+qid).style.display!=='none') ? st.options : [],
     match_data: (document.getElementById('iMatchBlock-'+qid).style.display!=='none') ? st.match : null
@@ -1212,6 +1261,7 @@ function clearCart(){CART=[];renderBrowse();renderCart();}
 
 function renderCart(){
   document.getElementById('cartCount').textContent='('+CART.length+')';
+  document.getElementById('cartTabCount').textContent='('+CART.length+')';
   const box=document.getElementById('cartList');box.innerHTML='';
   if(!CART.length){box.innerHTML='<p class="count">Nothing selected yet.</p>';return;}
   CART.forEach((id,i)=>{
@@ -1284,6 +1334,8 @@ function exportForCBT(){
 }
 
 /* ---------- GENERATE PAPER (from cart) ---------- */
+let LAST_PAPER = null; // {picks, title, marks, date} for answer key / faculty copy
+
 async function generatePaper(){
   const picks=CART.map(id=>QUESTIONS.find(q=>q.id===id)).filter(Boolean);
   if(!picks.length){toast('Select questions first (browse or auto-add).');return;}
@@ -1292,13 +1344,16 @@ async function generatePaper(){
   const title=document.getElementById('paperTitle').value||'Practice Paper';
   const marks=document.getElementById('paperMarks').value;
   const date=new Date().toLocaleDateString();
+  LAST_PAPER={picks, bySub, title, marks, date};
 
   let html=`<div class="paper-head"><h1>${title}</h1>
     <div class="meta">Date: ${date} &nbsp;·&nbsp; Questions: ${picks.length}${marks?' &nbsp;·&nbsp; Total Marks: '+marks:''}</div></div>`;
   let n=1;
+  const numbering={}; // q.id -> displayed number, reused by answer key/faculty copy
   Object.keys(bySub).forEach(sub=>{
     html+=`<h2 style="border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:24px">${sub}</h2>`;
     bySub[sub].forEach(q=>{
+      numbering[q.id]=n;
       const tlabel=[q.topic,q.subtopic].filter(Boolean).join(' › ');
       const tags=[tlabel,q.question_type,q.marks?q.marks+' marks':''].filter(Boolean).join(' · ');
       html+=`<div style="margin-bottom:4px"><span class="qnum">Q${n}.</span>
@@ -1307,6 +1362,7 @@ async function generatePaper(){
       n++;
     });
   });
+  LAST_PAPER.numbering=numbering;
   document.getElementById('paper').innerHTML=html;
   renderMath(document.getElementById('paper'));
   document.getElementById('paperActions').style.display='block';
@@ -1320,6 +1376,66 @@ async function generatePaper(){
   }
   document.getElementById('genStatus').textContent='';
   renderLibrary();
+}
+
+/* ---------- ANSWER KEY ---------- */
+function openPrintWindow(title, bodyHtml){
+  const w=window.open('','_blank');
+  if(!w){ toast('Please allow popups for this site.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+      body{font-family:Georgia,serif;max-width:820px;margin:0 auto;padding:28px;color:#1a2236}
+      h1{border-bottom:2px solid #1a2236;padding-bottom:10px}
+      .meta{color:#5b6479;font-size:13px;margin-bottom:20px}
+      .qrow{margin-bottom:14px;padding:10px 0;border-bottom:1px solid #e2e5ec}
+      .qnum{font-weight:700;margin-right:8px}
+      .ans{color:#2d6a4f;font-weight:600}
+      table{border-collapse:collapse;width:100%;margin-top:10px}
+      th,td{border:1px solid #e2e5ec;padding:6px 10px;text-align:left;font-size:13px}
+      .sol{margin-top:6px;padding:10px 14px;background:#f6f7f9;border-radius:8px;font-size:14px}
+      .noprint{margin-bottom:16px}
+      @media print{.noprint{display:none}}
+    </style></head><body>
+    ${bodyHtml}
+    <div class="noprint"><button onclick="window.print()" style="padding:10px 22px;font-size:15px;cursor:pointer">Print / Save as PDF</button></div>
+    <script>window.addEventListener('load',function(){function r(){if(window.renderMathInElement){renderMathInElement(document.body,{delimiters:[{left:'$',right:'$',display:false},{left:'$$',right:'$$',display:true}],throwOnError:false});}else{setTimeout(r,150);}}r();});</script>
+    </body></html>`);
+  w.document.close();
+}
+
+function downloadAnswerKey(){
+  if(!LAST_PAPER){ toast('Generate a paper first.'); return; }
+  const {picks, title, date, numbering} = LAST_PAPER;
+  let rows='';
+  picks.forEach(q=>{
+    const n=numbering[q.id];
+    rows+=`<div class="qrow"><span class="qnum">Q${n}.</span> <span class="ans">${(q.answer||'—').replace(/</g,'&lt;')}</span></div>`;
+  });
+  const html=`<h1>${title} — Answer Key</h1><div class="meta">Date: ${date} · ${picks.length} questions</div>${rows}`;
+  openPrintWindow(title+' - Answer Key', html);
+}
+
+/* ---------- FACULTY COPY (question + options + correct + solution) ---------- */
+function downloadFacultyCopy(){
+  if(!LAST_PAPER){ toast('Generate a paper first.'); return; }
+  const {picks, bySub, title, date, numbering} = LAST_PAPER;
+  let body='';
+  Object.keys(bySub).forEach(sub=>{
+    body+=`<h2 style="border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:20px">${sub}</h2>`;
+    bySub[sub].forEach(q=>{
+      const n=numbering[q.id];
+      body+=`<div class="qrow"><div><span class="qnum">Q${n}.</span></div>${questionCardHTML(q)}`;
+      body+=`<div class="ans" style="margin-top:6px">Correct answer: ${(q.answer||'—').replace(/</g,'&lt;')}</div>`;
+      const solutionNote = q.solution_text || '';
+      if(solutionNote) body+=`<div class="sol"><strong>Solution:</strong> ${solutionNote.replace(/</g,'&lt;')}</div>`;
+      body+=`</div>`;
+    });
+  });
+  const html=`<h1>${title} — Faculty Copy</h1><div class="meta">Date: ${date} · ${picks.length} questions · includes answers${picks.some(q=>q.solution_text)?' and solutions':''}</div>${body}`;
+  openPrintWindow(title+' - Faculty Copy', html);
 }
 
 /* ---------- LIBRARY ---------- */
@@ -1495,6 +1611,7 @@ function openEdit(id){
   document.getElementById('eMarks').value=editQ.marks||'';
   document.getElementById('eText').value=editQ.question_text||'';
   document.getElementById('eAnswer').value=editQ.answer||'';
+  document.getElementById('eSolution').value=editQ.solution_text||'';
   document.getElementById('eTextSize').value=editQ.text_size||100;
   document.getElementById('eTextSizeLbl').textContent='('+(editQ.text_size||100)+'%)';
   document.getElementById('eWidth').value=editQ.image_width||100;
@@ -1553,11 +1670,35 @@ document.getElementById('editFilePick').addEventListener('change',e=>{
 });
 
 /* ---------- LIVE PREVIEW (matches generated-paper rendering) ---------- */
+function stripInlineImgTags(text){
+  // Convert CBT-style [img]url[/img] / [img=NN]url[/img] tags into real <img> so
+  // previews match what QuestionRenderer.jsx shows students. [imgref=N] tags (which
+  // point into a question's extra_images list) are left as visible text markers here,
+  // since this app doesn't yet store multi-image sets per question.
+  if(!text) return '';
+  return text.replace(/\[img(?:=(\d+))?\]([\s\S]*?)\[\/img\]/gi,(m,w,url)=>
+    `<img src="${url.trim()}" style="display:block;max-width:100%;${w?('width:'+w+'%;'):'max-height:380px;'}margin:10px 0;border-radius:8px;border:1px solid var(--line)">`);
+}
+
+function escapeExceptImgTags(text){
+  // Escape HTML-unsafe chars everywhere EXCEPT inside [img]...[/img] tags, then convert those tags to real <img>.
+  if(!text) return '';
+  const parts=text.split(/(\[img(?:=\d+)?\][\s\S]*?\[\/img\])/gi);
+  return parts.map(p=>{
+    if(/^\[img/i.test(p)) return p; // leave tag intact for stripInlineImgTags
+    return p.replace(/</g,'&lt;');
+  }).join('');
+}
+
 function questionCardHTML(data){
   const size=data.text_size||100;
   let html=`<div class="q" style="font-size:${size}%">`;
-  if(data.question_text) html+=`<div class="qtext${data.is_krutidev?' krutidev':''}">${(data.question_text||'').replace(/</g,'&lt;')}</div>`;
-  if(data.image_url) html+=`<img src="${data.image_url}" style="width:${data.image_width||100}%">`;
+  if(data.question_text){
+    const escaped=escapeExceptImgTags(data.question_text);
+    const withImgs=stripInlineImgTags(escaped);
+    html+=`<div class="qtext${data.is_krutidev?' krutidev':''}">${withImgs}</div>`;
+  }
+  if(data.image_url) html+=`<img src="${data.image_url}" style="width:${data.image_width||100}%;display:block;margin-top:8px;border-radius:8px;border:1px solid var(--line)">`;
   if(data.question_type==='Match the Column' && data.match_data){
     const m=data.match_data;
     html+=`<table style="margin-top:8px;border-collapse:collapse;width:100%"><tr>
@@ -1569,7 +1710,16 @@ function questionCardHTML(data){
     });
     html+=`</table>`;
   } else if(Array.isArray(data.options) && data.options.length){
-    html+=`<div style="margin-top:8px">`+data.options.map(o=>`(${o.label}) ${o.text||''}`).join('&nbsp;&nbsp;&nbsp;')+`</div>`;
+    // Stacked lettered-circle options, matching CBT's QuestionRenderer style
+    html+=`<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">`;
+    data.options.forEach((o,i)=>{
+      const letter=(o.label||['a','b','c','d'][i]||'').toUpperCase();
+      html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:9px">
+        <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:var(--ink-soft);font-weight:700;font-size:12px">${letter}</div>
+        <div style="flex:1;padding-top:1px">${(o.text||'').replace(/</g,'&lt;')}</div>
+      </div>`;
+    });
+    html+=`</div>`;
   }
   html+=`</div>`;
   return html;
@@ -1612,6 +1762,7 @@ async function saveEdit(){
     question_text: document.getElementById('eText').value.trim()||null,
     text_size: Number(document.getElementById('eTextSize').value)||100,
     answer: document.getElementById('eAnswer').value.trim()||null,
+    solution_text: document.getElementById('eSolution').value.trim()||null,
     image_width: Number(document.getElementById('eWidth').value)||100,
     options: (document.getElementById('optionsBlock').style.display!=='none') ? editOptions : [],
     match_data: (document.getElementById('matchBlock').style.display!=='none') ? editMatch : null
