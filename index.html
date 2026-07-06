@@ -194,7 +194,7 @@
           <option value="">—</option>
           <option>Numerical</option><option>Graphical</option><option>Assertion Reason</option>
           <option>Match the Column</option><option>Statement Type</option><option>Numerical Value</option>
-          <option>True or False</option><option>MCQ</option><option>Other</option>
+          <option>True or False</option><option>MCQ</option><option>Multi-Answer</option><option>Other</option>
         </select>
       </div>
       <div class="field">
@@ -234,14 +234,14 @@
 <div id="pane-gen">
   <div class="help"><strong>Build a paper:</strong> pick Subject → Topic → Subtopic, then either browse &amp; tick questions, or auto-add N random ones. Review/edit everything in "Selected questions" before generating.</div>
 
-  <div class="row" style="margin-bottom:16px;gap:6px">
+  <div class="row noprint" style="margin-bottom:16px;gap:6px">
     <button id="subtabBrowseBtn" onclick="showGenSubtab('browse')" style="font-weight:700">🔍 Browse</button>
     <button id="subtabAutoBtn" class="ghost" onclick="showGenSubtab('auto')" style="font-weight:700">🎲 Auto-add</button>
     <button id="subtabCartBtn" class="ghost" onclick="showGenSubtab('cart')" style="font-weight:700">✅ Selected <span class="count" id="cartTabCount">(0)</span></button>
     <button id="subtabSettingsBtn" class="ghost" onclick="showGenSubtab('settings')" style="font-weight:700">⚙️ Paper Settings</button>
   </div>
 
-  <div class="row" style="margin-bottom:12px">
+  <div class="row noprint" style="margin-bottom:12px">
     <div class="field"><label>Subject</label><select id="gSubject" onchange="cascade('subject')"><option value="">—</option></select></div>
     <div class="field"><label>Topic</label><select id="gTopic" onchange="cascade('topic')"><option value="">All</option></select></div>
     <div class="field"><label>Subtopic</label><select id="gSubtopic" onchange="renderBrowse()"><option value="">All</option></select></div>
@@ -370,7 +370,7 @@
         <option>MCQ</option><option>Numerical</option><option>Graphical</option>
         <option>Assertion Reason</option><option>Match the Column</option>
         <option>Statement Type</option><option>Numerical Value</option>
-        <option>True or False</option><option>Other</option>
+        <option>True or False</option><option>Multi-Answer</option><option>Other</option>
       </select>
     </div>
     <div class="field">
@@ -1157,6 +1157,7 @@ function inlineCardHTML(q, num, inCart){
       <option ${q.question_type==='Graphical'?'selected':''}>Graphical</option><option ${q.question_type==='Assertion Reason'?'selected':''}>Assertion Reason</option>
       <option ${q.question_type==='Match the Column'?'selected':''}>Match the Column</option><option ${q.question_type==='Statement Type'?'selected':''}>Statement Type</option>
       <option ${q.question_type==='Numerical Value'?'selected':''}>Numerical Value</option><option ${q.question_type==='True or False'?'selected':''}>True or False</option>
+      <option ${q.question_type==='Multi-Answer'?'selected':''}>Multi-Answer</option>
       <option ${(!q.question_type||q.question_type==='Other')?'selected':''}>Other</option>
     </select>
   </div>
@@ -1236,9 +1237,9 @@ function inlineState(qid){
 function onInlineTypeChange(qid){
   const t=document.getElementById('iType-'+qid).value;
   const st=inlineState(qid);
-  document.getElementById('iOptionsBlock-'+qid).style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column')?'block':'none';
+  document.getElementById('iOptionsBlock-'+qid).style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column'||t==='Multi-Answer')?'block':'none';
   document.getElementById('iMatchBlock-'+qid).style.display=(t==='Match the Column')?'block':'none';
-  if((t==='MCQ'||t==='Match the Column') && st.options.length===0) st.options=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
+  if((t==='MCQ'||t==='Match the Column'||t==='Multi-Answer') && st.options.length===0) st.options=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
   if(t==='True or False' && st.options.length===0) st.options=[{label:'a',text:'True'},{label:'b',text:'False'}];
   if(t==='Match the Column' && !st.match) st.match={colA:'Column I',colB:'Column II',rows:[{left:'',right:''},{left:'',right:''}]};
   renderInlineOptions(qid); renderInlineMatch(qid); livePreviewInline(qid);
@@ -1249,12 +1250,12 @@ function renderInlineOptions(qid){
   const box=document.getElementById('iOptionsList-'+qid); if(!box) return;
   box.innerHTML='';
   const ansEl=document.getElementById('iAnswer-'+qid);
-  const m=(ansEl?ansEl.value:'').match(/\(([a-dA-D])\)/);
-  const correctLetter = m ? m[1].toLowerCase() : null;
+  const m=(ansEl?ansEl.value:'').match(/\(([a-dA-D,\s]+)\)/);
+  const correctLetters = m ? m[1].toLowerCase().split(',').map(s=>s.trim()).filter(Boolean) : [];
   st.options.forEach((o,i)=>{
     const row=document.createElement('div'); row.className='opt-row';
     const label=(o.label||String.fromCharCode(97+i)).toLowerCase();
-    const isCorrect = correctLetter && label===correctLetter;
+    const isCorrect = correctLetters.includes(label);
     row.innerHTML=`<button type="button" class="opt-letter-btn${isCorrect?' correct':''}" onclick="markInlineCorrect(${qid},${i})">${label.toUpperCase()}</button>
       <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="inlineState(${qid}).options[${i}].text=this.value;livePreviewInline(${qid})">
       <div class="opt-imgzone" id="optImgZone-inline-${qid}-${i}" tabindex="0">${o.image_url?`<img src="${o.image_url}">`:'img'}</div>
@@ -1269,7 +1270,18 @@ function markInlineCorrect(qid,i){
   const st=inlineState(qid);
   const label=(st.options[i].label||String.fromCharCode(97+i)).toLowerCase();
   const ansEl=document.getElementById('iAnswer-'+qid);
-  if(ansEl) ansEl.value='('+label+')';
+  const typeEl=document.getElementById('iType-'+qid);
+  if(ansEl){
+    if(typeEl && typeEl.value==='Multi-Answer'){
+      const m=(ansEl.value||'').match(/\(([a-dA-D,\s]+)\)/);
+      let arr = m ? m[1].toLowerCase().split(',').map(s=>s.trim()).filter(Boolean) : [];
+      if(arr.includes(label)) arr=arr.filter(x=>x!==label); else arr.push(label);
+      arr.sort();
+      ansEl.value = arr.length ? '('+arr.join(',')+')' : '';
+    } else {
+      ansEl.value='('+label+')';
+    }
+  }
   renderInlineOptions(qid); livePreviewInline(qid);
 }
 function addInlineOption(qid){
@@ -1784,9 +1796,9 @@ function fillEditSubjectDropdown(){
 
 function onTypeChange(){
   const t=document.getElementById('eType').value;
-  document.getElementById('optionsBlock').style.display = (t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column') ? 'block':'none';
+  document.getElementById('optionsBlock').style.display = (t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column'||t==='Multi-Answer') ? 'block':'none';
   document.getElementById('matchBlock').style.display = (t==='Match the Column') ? 'block':'none';
-  if((t==='MCQ'||t==='Match the Column') && editOptions.length===0){
+  if((t==='MCQ'||t==='Match the Column'||t==='Multi-Answer') && editOptions.length===0){
     editOptions=[{label:'a',text:''},{label:'b',text:''},{label:'c',text:''},{label:'d',text:''}];
   }
   if(t==='True or False' && editOptions.length===0){
@@ -1800,12 +1812,12 @@ function onTypeChange(){
 
 function renderOptions(){
   const box=document.getElementById('optionsList'); box.innerHTML='';
-  const m=(document.getElementById('eAnswer').value||'').match(/\(([a-dA-D])\)/);
-  const correctLetter = m ? m[1].toLowerCase() : null;
+  const m=(document.getElementById('eAnswer').value||'').match(/\(([a-dA-D,\s]+)\)/);
+  const correctLetters = m ? m[1].toLowerCase().split(',').map(s=>s.trim()).filter(Boolean) : [];
   editOptions.forEach((o,i)=>{
     const row=document.createElement('div'); row.className='opt-row';
     const label=(o.label||String.fromCharCode(97+i)).toLowerCase();
-    const isCorrect = correctLetter && label===correctLetter;
+    const isCorrect = correctLetters.includes(label);
     row.innerHTML=`<button type="button" class="opt-letter-btn${isCorrect?' correct':''}" onclick="markCorrect(${i})">${label.toUpperCase()}</button>
       <input type="text" value="${(o.text||'').replace(/"/g,'&quot;')}" style="flex:1" oninput="editOptions[${i}].text=this.value;livePreview()">
       <div class="opt-imgzone" id="optImgZone-edit-0-${i}" tabindex="0">${o.image_url?`<img src="${o.image_url}">`:'img'}</div>
@@ -1814,13 +1826,22 @@ function renderOptions(){
       <button class="danger mini" onclick="editOptions.splice(${i},1);renderOptions();livePreview()">✕</button>`;
     box.appendChild(row);
   });
-  const correctOpt = editOptions.find(o=>{const l=(o.label||'').toLowerCase();return correctLetter && l===correctLetter;});
+  const correctOpts = editOptions.filter(o=>correctLetters.includes((o.label||'').toLowerCase()));
   const lbl=document.getElementById('correctLabel');
-  if(lbl) lbl.textContent = correctOpt ? 'Correct: Option '+correctOpt.label.toUpperCase() : 'Click a letter above to mark the correct option.';
+  if(lbl) lbl.textContent = correctOpts.length ? 'Correct: Option '+correctOpts.map(o=>o.label.toUpperCase()).join(', ') : 'Click a letter above to mark the correct option'+(document.getElementById('eType').value==='Multi-Answer'?'(s).':'.');
 }
 function markCorrect(i){
   const label=(editOptions[i].label||String.fromCharCode(97+i)).toLowerCase();
-  document.getElementById('eAnswer').value='('+label+')';
+  const ansEl=document.getElementById('eAnswer');
+  if(document.getElementById('eType').value==='Multi-Answer'){
+    const m=(ansEl.value||'').match(/\(([a-dA-D,\s]+)\)/);
+    let arr = m ? m[1].toLowerCase().split(',').map(s=>s.trim()).filter(Boolean) : [];
+    if(arr.includes(label)) arr=arr.filter(x=>x!==label); else arr.push(label);
+    arr.sort();
+    ansEl.value = arr.length ? '('+arr.join(',')+')' : '';
+  } else {
+    ansEl.value='('+label+')';
+  }
   renderOptions(); livePreview();
 }
 function addOption(){
@@ -1900,7 +1921,7 @@ function openEdit(id){
   }
 
   const t=editQ.question_type;
-  document.getElementById('optionsBlock').style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column')?'block':'none';
+  document.getElementById('optionsBlock').style.display=(t==='MCQ'||t==='True or False'||t==='Assertion Reason'||t==='Statement Type'||t==='Match the Column'||t==='Multi-Answer')?'block':'none';
   document.getElementById('matchBlock').style.display=(t==='Match the Column')?'block':'none';
   renderOptions(); renderMatch();
   livePreview();
