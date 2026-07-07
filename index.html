@@ -302,7 +302,7 @@
       <div class="field"><label>Total marks (optional)</label><input type="text" id="paperMarks" placeholder="e.g. 100" style="width:130px"></div>
     </div>
     <div class="row" style="margin-bottom:12px">
-      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="paperTwoCol" checked style="width:auto"> Two-column layout (with divider line) — applies to Question Paper, Answer Key &amp; Faculty Copy</label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="paperTwoCol" checked style="width:auto"> Two-column layout (with divider line) — applies to Student Copy, Answer Key &amp; Faculty Copy</label>
     </div>
     <div class="row">
       <button onclick="generatePaper()">Generate Final Paper</button>
@@ -316,7 +316,7 @@
     <h2>Your paper is ready</h2>
     <p class="count">Use count of each included question has been increased.</p>
     <div class="row">
-      <button onclick="window.print()">🖨️ Print / Save Question Paper</button>
+      <button onclick="window.print()">🖨️ Print / Save Student Copy</button>
       <button class="ghost" onclick="downloadAnswerKey()">🔑 Download Answer Key</button>
       <button class="ghost" onclick="downloadFacultyCopy()">👩‍🏫 Download Faculty Copy</button>
     </div>
@@ -1556,11 +1556,8 @@ async function generatePaper(){
     html+=`<h2 style="border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:24px">${sub}</h2>`;
     bySub[sub].forEach(q=>{
       numbering[q.id]=n;
-      const tlabel=[q.topic,q.subtopic].filter(Boolean).join(' › ');
-      const tags=[tlabel,q.question_type,q.marks?q.marks+' marks':''].filter(Boolean).join(' · ');
-      html+=`<div style="margin-bottom:4px"><span class="qnum">Q${n}.</span>
-        ${tags?'<span class="qtopic">['+tags+']</span>':''}</div>
-        ${questionCardHTML(q)}`;
+      html+=`<div style="margin-bottom:4px"><span class="qnum">Q${n}.</span></div>
+        ${questionCardHTML(q, {noOptionBox:true})}`;
       n++;
     });
   });
@@ -2047,7 +2044,8 @@ function escapeExceptImgTags(text){
   }).join('');
 }
 
-function questionCardHTML(data){
+function questionCardHTML(data, opts){
+  opts=opts||{};
   const size=data.text_size||100;
   let html=`<div class="q" style="font-size:${size}%">`;
   if(data.passage){
@@ -2078,9 +2076,10 @@ function questionCardHTML(data){
   if(Array.isArray(data.options) && data.options.length){
     // Stacked lettered-circle options, matching CBT's QuestionRenderer style
     html+=`<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">`;
+    const optBoxStyle=opts.noOptionBox?'padding:4px 0':'padding:8px 12px;border:1.5px solid var(--line);border-radius:9px';
     data.options.forEach((o,i)=>{
       const letter=(o.label||['a','b','c','d'][i]||'').toUpperCase();
-      html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 12px;border:1.5px solid var(--line);border-radius:9px">
+      html+=`<div style="display:flex;align-items:flex-start;gap:12px;${optBoxStyle}">
         <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:var(--ink-soft);font-weight:700;font-size:12px">${letter}</div>
         <div style="flex:1;padding-top:1px">
           ${(o.text||'').replace(/</g,'&lt;')}
