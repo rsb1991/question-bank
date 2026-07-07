@@ -243,7 +243,7 @@
     <button id="subtabSettingsBtn" class="ghost" onclick="showGenSubtab('settings')" style="font-weight:700">⚙️ Paper Settings</button>
   </div>
 
-  <div class="row noprint" style="margin-bottom:12px">
+  <div class="row noprint" id="genFilterRow" style="margin-bottom:12px">
     <div class="field"><label>Subject</label><select id="gSubject" onchange="cascade('subject')"><option value="">—</option></select></div>
     <div class="field"><label>Topic</label><select id="gTopic" onchange="cascade('topic')"><option value="">All</option></select></div>
     <div class="field"><label>Subtopic</label><select id="gSubtopic" onchange="renderBrowse()"><option value="">All</option></select></div>
@@ -297,6 +297,7 @@
 
   <div class="panel" id="subtab-settings" style="display:none">
     <h2>⚙️ Paper settings</h2>
+    <div id="paperSummaryTable" style="margin-bottom:16px"></div>
     <div class="row" style="margin-bottom:12px">
       <div class="field"><label>Paper title</label><input type="text" id="paperTitle" value="Practice Paper" style="min-width:220px"></div>
       <div class="field"><label>Total marks (optional)</label><input type="text" id="paperMarks" placeholder="e.g. 100" style="width:130px"></div>
@@ -540,11 +541,38 @@ function showGenSubtab(name){
   document.getElementById('subtab-auto').style.display = name==='auto'?'block':'none';
   document.getElementById('subtab-cart').style.display = name==='cart'?'block':'none';
   document.getElementById('subtab-settings').style.display = name==='settings'?'block':'none';
+  document.getElementById('genFilterRow').style.display = name==='settings'?'none':'flex';
+  if(name==='settings') renderPaperSummary();
   document.getElementById('subtabBrowseBtn').classList.toggle('ghost',name!=='browse');
   document.getElementById('subtabAutoBtn').classList.toggle('ghost',name!=='auto');
   document.getElementById('subtabCartBtn').classList.toggle('ghost',name!=='cart');
   document.getElementById('subtabSettingsBtn').classList.toggle('ghost',name!=='settings');
   if(name==='cart') renderCart();
+}
+
+function renderPaperSummary(){
+  const box=document.getElementById('paperSummaryTable');
+  if(!box) return;
+  if(!QUESTIONS.length){ box.innerHTML='<p class="count">No questions in library yet.</p>'; return; }
+  const bySub={};
+  QUESTIONS.forEach(q=>{
+    const sub=q.subject||'(No subject)';
+    const top=q.topic||'(No topic)';
+    bySub[sub]=bySub[sub]||{};
+    bySub[sub][top]=(bySub[sub][top]||0)+1;
+  });
+  let html=`<table><thead><tr><th>Subject</th><th>Topic</th><th>Questions</th></tr></thead><tbody>`;
+  Object.keys(bySub).sort().forEach(sub=>{
+    const topics=bySub[sub];
+    const topicKeys=Object.keys(topics).sort();
+    let subTotal=0; topicKeys.forEach(t=>subTotal+=topics[t]);
+    topicKeys.forEach((t,i)=>{
+      html+=`<tr>${i===0?`<td rowspan="${topicKeys.length+1}"><strong>${sub}</strong></td>`:''}<td>${t}</td><td>${topics[t]}</td></tr>`;
+    });
+    html+=`<tr><td style="color:var(--ink-soft)"><em>Subtotal</em></td><td style="color:var(--ink-soft)"><em>${subTotal}</em></td></tr>`;
+  });
+  html+=`</tbody></table>`;
+  box.innerHTML=html;
 }
 
 /* ---------- PASTE IMAGE HANDLING ---------- */
@@ -957,6 +985,7 @@ async function loadQuestions(){
   buildGenControls();
   populateLibFilters();
   renderCart();
+  renderPaperSummary();
 }
 
 function populateDatalists(){
